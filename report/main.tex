@@ -1,0 +1,118 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+
+\title{Microchip Character Recognition Using Image Processing and Machine Learning}
+
+\author{
+  \IEEEauthorblockN{Group 8}
+  \IEEEauthorblockA{
+    ME5411 Robot Vision and AI\\
+    National University of Singapore\\
+    Singapore
+  }
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents an image-processing and machine-learning pipeline for
+recognizing characters printed on a microchip. The final report will describe
+the preprocessing, segmentation, feature extraction, classification, and
+evaluation procedures developed by Group 8.
+\end{abstract}
+
+\begin{IEEEkeywords}
+robot vision, image processing, character recognition, convolutional neural
+network, classification
+\end{IEEEkeywords}
+
+\section{Introduction}
+Character recognition in low-contrast industrial imagery requires careful
+preprocessing, segmentation, and classification. Classical image-processing
+methods provide interpretable tools for enhancing and isolating characters
+\cite{gonzalez2018digital}, while convolutional neural networks can learn
+features directly from image data \cite{lecun1998gradient}.
+
+This document is an initial report template. Replace all placeholder text with
+the project group's own analysis, experimental evidence, and conclusions.
+
+\section{Problem Formulation}
+Describe the input image, recognition targets, operating assumptions, and
+evaluation criteria. State the dataset split and measures used for comparison.
+
+\section{Methodology}
+
+\subsection{Image Enhancement and Smoothing}
+Describe the contrast-enhancement method, the averaging filter, alternative
+filter sizes, and the rationale for each design choice.
+
+\subsection{Region of Interest and Binarization}
+Explain how the target text line is cropped and converted into a binary image.
+Include parameter choices and intermediate results.
+
+\subsection{Outline Extraction and Character Segmentation}
+Describe how character boundaries are determined, how connected components are
+labeled, and how segmentation errors are handled.
+
+\subsection{CNN Classifier}
+Document the network architecture, input preprocessing, loss function,
+optimizer, hyperparameters, and training procedure.
+
+\subsection{Non-CNN Classifier}
+Describe the selected non-CNN method, the feature representation, training
+procedure, and hyperparameters.
+
+\section{Experimental Setup}
+Report the software environment, hardware, random seeds, dataset split, data
+preprocessing, hyperparameter search, and evaluation metrics. Ensure that all
+experiments can be reproduced using the submitted code.
+
+\section{Results}
+Present quantitative and qualitative results. Include intermediate
+image-processing outputs, classification metrics, confusion matrices, runtime
+measurements, and sensitivity studies.
+
+\begin{table}[t]
+  \caption{Placeholder Classification Results}
+  \label{tab:results}
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    Method & Accuracy (\%) & Runtime (ms) \\
+    \midrule
+    CNN & -- & -- \\
+    Non-CNN & -- & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Discussion}
+Compare the effectiveness, efficiency, robustness, and failure modes of the two
+classification approaches. Explain observed differences using evidence from the
+experiments rather than accuracy alone.
+
+\section{Conclusion}
+Summarize the principal findings, lessons learned, limitations, and possible
+improvements.
+
+\section*{Code Execution Guide}
+Provide step-by-step instructions for installing dependencies, preparing data,
+running every processing stage, training both classifiers, and reproducing all
+reported figures and tables.
+
+\section*{Acknowledgment}
+List external libraries, toolboxes, third-party code, and other assistance that
+must be acknowledged according to the course requirements.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
+
