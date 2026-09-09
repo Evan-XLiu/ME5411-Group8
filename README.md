@@ -5,7 +5,7 @@ ME5411 Robot Vision and AI 小组项目仓库。
 ## 文件结构
 
 ```text
-data/       数据集（不会上传到 GitHub）
+data/       数据集
 src/        Task 1--7 的代码
 results/    实验结果与模型
 report/     IEEE LaTeX 报告
