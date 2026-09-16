@@ -1,0 +1,7 @@
+# Core Tasks 1-4 and Task 6
+numpy>=1.23
+Pillow>=9.0
+scikit-learn>=1.1  # optional: Task 6 falls back to nearest-centroid without it
+
+# Task 5 (install the CPU or CUDA build appropriate for the machine)
+torch>=2.0

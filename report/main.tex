@@ -40,8 +40,11 @@ methods provide interpretable tools for enhancing and isolating characters
 \cite{gonzalez2018digital}, while convolutional neural networks can learn
 features directly from image data \cite{lecun1998gradient}.
 
-This document is an initial report template. Replace all placeholder text with
-the project group's own analysis, experimental evidence, and conclusions.
+The implementation is organised as six reproducible tasks. Tasks 1--4 use
+classical image-processing operators covered in the lectures; Tasks 5 and 6
+compare a compact CNN with a conventional HOG-based classifier. Since the
+course images are kept outside the repository, numerical results are generated
+by the supplied commands after the data are placed in \texttt{data/raw/}.
 
 \section{Problem Formulation}
 Describe the input image, recognition targets, operating assumptions, and
@@ -50,24 +53,54 @@ evaluation criteria. State the dataset split and measures used for comparison.
 \section{Methodology}
 
 \subsection{Image Enhancement and Smoothing}
-Describe the contrast-enhancement method, the averaging filter, alternative
-filter sizes, and the rationale for each design choice.
+Task 1 first converts each input to an 8-bit grayscale image and applies the
+piecewise-linear contrast transform
+\begin{equation}
+  g(x,y)=\operatorname{clip}\left(255\frac{f(x,y)-r_{\min}}
+  {r_{\max}-r_{\min}},0,255\right).
+  \label{eq:stretch}
+\end{equation}
+The input limits are measured from the image unless explicitly supplied. A
+histogram-equalisation alternative is also implemented for images whose
+histogram occupies only a narrow range. Task 2 provides the normalized
+$3\times3$ (or arbitrary odd-size) averaging mask from the lectures, a
+separable Gaussian mask, a median filter for impulse noise, and the rotating
+mask average that chooses the locally most homogeneous window. The selected
+filter and size are recorded in the command line used for an experiment.
 
 \subsection{Region of Interest and Binarization}
-Explain how the target text line is cropped and converted into a binary image.
-Include parameter choices and intermediate results.
+Task 3 accepts an explicit $(x,y,w,h)$ text-line ROI so that camera-specific
+geometry is not hidden in the algorithm. When no ROI is supplied the full image
+is used. Otsu's between-class variance selects a global threshold automatically;
+local mean thresholding is available when illumination varies across the chip.
+Both bright-on-dark and dark-on-bright text are supported. Foreground pixels are
+stored as one (and written as 255 in PNG files).
 
 \subsection{Outline Extraction and Character Segmentation}
-Describe how character boundaries are determined, how connected components are
-labeled, and how segmentation errors are handled.
+Task 4 computes the horizontal and vertical Sobel responses and their gradient
+magnitude, yielding the outline diagnostic required by the segmentation
+lectures. The binary foreground is then labelled with either 4- or
+8-connectivity using a flood-fill implementation. Components smaller than the
+configurable area threshold are rejected as noise. Each remaining component is
+sorted left-to-right, padded, and exported as a character crop together with
+its bounding box, centroid, area, and perimeter in JSON. These diagnostics make
+merged or split characters visible before model training.
 
 \subsection{CNN Classifier}
-Document the network architecture, input preprocessing, loss function,
-optimizer, hyperparameters, and training procedure.
+Task 5 resizes each crop to $32\times32$ and scales intensities to $[0,1]$.
+The network has three convolutional blocks (16, 32, and 64 channels), batch
+normalisation/ReLU, max pooling, adaptive average pooling, and two fully
+connected layers. Cross-entropy loss is optimized with Adam (learning rate
+$10^{-3}$ by default), using a fixed seed and a stratified 80/20 split. A
+checkpoint stores the class names, preprocessing size, seed, and epoch history.
 
 \subsection{Non-CNN Classifier}
-Describe the selected non-CNN method, the feature representation, training
-procedure, and hyperparameters.
+Task 6 uses a 32-by-32 unsigned-gradient HOG descriptor (4-pixel cells and nine
+orientation bins). An RBF SVM with $C=10$ is used when scikit-learn is present;
+the same interface falls back to a nearest-centroid classifier for a minimal
+installation. The feature extractor, split seed, classifier type, and accuracy
+are serialized so that the baseline can be compared with the CNN without
+changing the data protocol.
 
 \section{Experimental Setup}
 Report the software environment, hardware, random seeds, dataset split, data
@@ -103,9 +136,32 @@ Summarize the principal findings, lessons learned, limitations, and possible
 improvements.
 
 \section*{Code Execution Guide}
-Provide step-by-step instructions for installing dependencies, preparing data,
-running every processing stage, training both classifiers, and reproducing all
-reported figures and tables.
+Install the dependencies listed in \texttt{requirements.txt}, then run the
+following from the repository root with \texttt{PYTHONPATH=src}:
+
+\begingroup
+\scriptsize
+\begin{verbatim}
+python -m task_01.enhance --input data/raw/chip.png \
+  --output results/figures/enhanced.png
+python -m task_02.smooth --input results/figures/enhanced.png \
+  --output results/figures/smoothed.png --method gaussian --size 3
+python -m task_03.threshold --input results/figures/smoothed.png \
+  --output results/figures/binary.png --method otsu
+python -m task_04.segment --input results/figures/binary.png \
+  --output-dir data/processed/characters
+python -m task_05.cnn --data data/processed/characters \
+  --model results/models/character_cnn.pt
+python -m task_06.classical train --data data/processed/characters \
+  --model results/models/hog_svm.pkl
+\end{verbatim}
+\endgroup
+
+The classifier data set has one directory per character (for example
+\texttt{characters/A/*.png}). Task 4 crops are assigned to these directories
+using the available ground truth before training. Every command accepts a
+\texttt{--help} page with parameter defaults and writes generated artifacts only
+under \texttt{results/} or \texttt{data/processed/}.
 
 \section*{Acknowledgment}
 List external libraries, toolboxes, third-party code, and other assistance that
@@ -115,4 +171,3 @@ must be acknowledged according to the course requirements.
 \bibliography{references}
 
 \end{document}
-

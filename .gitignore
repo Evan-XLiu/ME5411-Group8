@@ -44,3 +44,5 @@ results/models/*
 *.toc
 report/main.pdf
 
+# Course material is local reference only and is not part of the submission
+Lecture Notes/
