@@ -71,7 +71,11 @@ def image_statistics(image):
 
 def labeled_panel(image, label):
     """Create a report-ready panel with a readable method label."""
-    panel = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    panel = (
+        cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        if image.ndim == 2
+        else image.copy()
+    )
     panel = cv2.copyMakeBorder(
         panel, 38, 0, 0, 0, cv2.BORDER_CONSTANT, value=(0, 0, 0)
     )
@@ -135,6 +139,45 @@ def adaptive_binarization(image, block_size=31, c=-5.0):
         c,
     )
 
+
+def remove_small_components(binary, min_area=200):
+    """Remove connected foreground regions smaller than ``min_area`` pixels."""
+    component_count, labels, statistics, _ = cv2.connectedComponentsWithStats(
+        (binary > 0).astype(np.uint8), connectivity=8
+    )
+    cleaned = np.zeros_like(binary)
+    retained = []
+    for label in range(1, component_count):
+        area = int(statistics[label, cv2.CC_STAT_AREA])
+        if area >= min_area:
+            cleaned[labels == label] = 255
+            retained.append(area)
+    return cleaned, component_count - 1, retained
+
+
+def character_outlines(grayscale, cleaned_binary):
+    """Generate Sobel and binary-boundary outlines around character regions."""
+    gradient_x = cv2.Sobel(grayscale, cv2.CV_32F, 1, 0, ksize=3)
+    gradient_y = cv2.Sobel(grayscale, cv2.CV_32F, 0, 1, ksize=3)
+    magnitude = cv2.magnitude(gradient_x, gradient_y)
+    maximum = float(magnitude.max())
+    normalized = (
+        np.rint(magnitude * 255.0 / maximum).astype(np.uint8)
+        if maximum > 0
+        else np.zeros_like(grayscale)
+    )
+    sobel_threshold, sobel = otsu_binarization(normalized)
+    character_neighbourhood = cv2.dilate(
+        cleaned_binary, np.ones((5, 5), dtype=np.uint8), iterations=1
+    )
+    sobel = cv2.bitwise_and(sobel, character_neighbourhood)
+
+    eroded = cv2.erode(
+        cleaned_binary, np.ones((3, 3), dtype=np.uint8), iterations=1
+    )
+    morphological = cv2.subtract(cleaned_binary, eroded)
+    return sobel_threshold, sobel, morphological
+
 # 2. 定义一个均值滤波器类
 class AveragingFilter:
     def __init__(self, size):
@@ -197,6 +240,12 @@ def main():
         type=float,
         default=-5.0,
         help="constant subtracted from the adaptive local threshold",
+    )
+    parser.add_argument(
+        "--min-noise-area",
+        type=int,
+        default=200,
+        help="minimum connected-component area retained before outline extraction",
     )
     parser.add_argument("--show", action="store_true", help="display the original image in a window")
     args = parser.parse_args()
@@ -367,6 +416,65 @@ def main():
         encoding="utf-8",
     )
 
+    cleaned_binary, component_count_before, retained_areas = remove_small_components(
+        binary_otsu, args.min_noise_area
+    )
+    sobel_threshold, sobel_outline, morphological_outline = character_outlines(
+        roi_smoothed, cleaned_binary
+    )
+    contours, _ = cv2.findContours(
+        cleaned_binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
+    )
+    contour_overlay = cv2.cvtColor(roi_original, cv2.COLOR_GRAY2BGR)
+    cv2.drawContours(contour_overlay, contours, -1, (0, 255, 0), thickness=2)
+
+    cleaned_binary_path = output_dir / "13_binary_cleaned.png"
+    sobel_outline_path = output_dir / "14_outline_sobel.png"
+    morphological_outline_path = output_dir / "15_outline_morphological.png"
+    contour_overlay_path = output_dir / "16_contour_overlay.png"
+    save_image(cleaned_binary_path, cleaned_binary)
+    save_image(sobel_outline_path, sobel_outline)
+    save_image(morphological_outline_path, morphological_outline)
+    save_image(contour_overlay_path, contour_overlay)
+
+    outline_comparison = np.vstack(
+        [
+            np.hstack(
+                [
+                    labeled_panel(cleaned_binary, "Cleaned Otsu binary"),
+                    labeled_panel(sobel_outline, "Masked Sobel outline"),
+                ]
+            ),
+            np.hstack(
+                [
+                    labeled_panel(morphological_outline, "Morphological outline"),
+                    labeled_panel(contour_overlay, "Contours on original ROI"),
+                ]
+            ),
+        ]
+    )
+    outline_comparison = cv2.resize(
+        outline_comparison, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA
+    )
+    outline_comparison_path = output_dir / "task5_outline_comparison.png"
+    save_image(outline_comparison_path, outline_comparison)
+    outline_metrics_path = output_dir / "task5_outline_metrics.json"
+    outline_metrics_path.write_text(
+        json.dumps(
+            {
+                "minimum_component_area": args.min_noise_area,
+                "components_before_cleanup": component_count_before,
+                "components_retained": len(retained_areas),
+                "retained_component_areas": retained_areas,
+                "sobel_threshold": sobel_threshold,
+                "contours_drawn_including_inner_boundaries": len(contours),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
     print(f"Loaded image: {args.input}")
     print(f"Image size: {width} x {height}")
     print(f"Saved grayscale original: {args.output}")
@@ -378,12 +486,15 @@ def main():
     print(f"Saved Task 3 ROI metadata: {roi_metadata_path}")
     print(f"Saved Task 4 binarization comparison: {binary_comparison_path}")
     print(f"Saved Task 4 binarization metrics: {binary_metrics_path}")
+    print(f"Saved Task 5 outline comparison: {outline_comparison_path}")
+    print(f"Saved Task 5 outline metrics: {outline_metrics_path}")
 
     if args.show:
         cv2.imshow("ME5411 - Task 1 contrast comparison", comparison)
         cv2.imshow("ME5411 - Task 2 averaging-filter comparison", filter_comparison)
         cv2.imshow("ME5411 - Task 3 HD44780A00 ROI", roi_comparison)
         cv2.imshow("ME5411 - Task 4 binarization", binary_comparison)
+        cv2.imshow("ME5411 - Task 5 character outlines", outline_comparison)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
