@@ -1,0 +1,123 @@
+{
+  "target_text": "HD44780A00",
+  "detected_character_count": 10,
+  "connected_components_before_splitting": 7,
+  "typical_component_width": 90.0,
+  "projection_split_columns": [
+    196,
+    546,
+    810
+  ],
+  "characters": [
+    {
+      "index": 1,
+      "label": "H",
+      "bbox_xywh": [
+        14,
+        34,
+        90,
+        118
+      ],
+      "crop_file": "results\\figures\\characters\\01_H.png"
+    },
+    {
+      "index": 2,
+      "label": "D",
+      "bbox_xywh": [
+        106,
+        24,
+        90,
+        138
+      ],
+      "crop_file": "results\\figures\\characters\\02_D.png"
+    },
+    {
+      "index": 3,
+      "label": "4",
+      "bbox_xywh": [
+        196,
+        31,
+        85,
+        127
+      ],
+      "crop_file": "results\\figures\\characters\\03_4.png"
+    },
+    {
+      "index": 4,
+      "label": "4",
+      "bbox_xywh": [
+        286,
+        18,
+        83,
+        130
+      ],
+      "crop_file": "results\\figures\\characters\\04_4.png"
+    },
+    {
+      "index": 5,
+      "label": "7",
+      "bbox_xywh": [
+        379,
+        25,
+        81,
+        124
+      ],
+      "crop_file": "results\\figures\\characters\\05_7.png"
+    },
+    {
+      "index": 6,
+      "label": "8",
+      "bbox_xywh": [
+        460,
+        32,
+        86,
+        119
+      ],
+      "crop_file": "results\\figures\\characters\\06_8.png"
+    },
+    {
+      "index": 7,
+      "label": "0",
+      "bbox_xywh": [
+        546,
+        29,
+        90,
+        124
+      ],
+      "crop_file": "results\\figures\\characters\\07_0.png"
+    },
+    {
+      "index": 8,
+      "label": "A",
+      "bbox_xywh": [
+        637,
+        33,
+        84,
+        113
+      ],
+      "crop_file": "results\\figures\\characters\\08_A.png"
+    },
+    {
+      "index": 9,
+      "label": "0",
+      "bbox_xywh": [
+        722,
+        29,
+        88,
+        121
+      ],
+      "crop_file": "results\\figures\\characters\\09_0.png"
+    },
+    {
+      "index": 10,
+      "label": "0",
+      "bbox_xywh": [
+        810,
+        27,
+        87,
+        125
+      ],
+      "crop_file": "results\\figures\\characters\\10_0.png"
+    }
+  ]
+}
