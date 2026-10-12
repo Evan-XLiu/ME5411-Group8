@@ -21,6 +21,8 @@ venv/
 # Local datasets and generated outputs
 data/raw/*
 data/processed/*
+dataset_2026_updated/
+Test_Image_2026.bmp
 results/figures/*
 results/models/*
 !data/raw/.gitkeep
