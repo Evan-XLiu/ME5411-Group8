@@ -72,7 +72,9 @@ def image_statistics(image):
 def labeled_panel(image, label):
     """Create a report-ready panel with a readable method label."""
     panel = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-    cv2.rectangle(panel, (0, 0), (360, 38), (0, 0, 0), thickness=-1)
+    panel = cv2.copyMakeBorder(
+        panel, 38, 0, 0, 0, cv2.BORDER_CONSTANT, value=(0, 0, 0)
+    )
     cv2.putText(
         panel,
         label,
@@ -84,6 +86,20 @@ def labeled_panel(image, label):
         cv2.LINE_AA,
     )
     return panel
+
+
+def crop_roi(image, roi):
+    """Crop an ``(x, y, width, height)`` region after validating its bounds."""
+    x, y, width, height = map(int, roi)
+    image_height, image_width = image.shape[:2]
+    if width <= 0 or height <= 0:
+        raise ValueError("ROI width and height must be positive")
+    if x < 0 or y < 0 or x + width > image_width or y + height > image_height:
+        raise ValueError(
+            f"ROI {(x, y, width, height)} exceeds image size "
+            f"{(image_width, image_height)}"
+        )
+    return image[y : y + height, x : x + width]
 
 # 2. 定义一个均值滤波器类
 class AveragingFilter:
@@ -128,10 +144,19 @@ def main():
     parser = argparse.ArgumentParser(description="ME5411 character-processing pipeline")
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="input chip image")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="saved grayscale image")
+    parser.add_argument(
+        "--roi",
+        nargs=4,
+        type=int,
+        default=(45, 180, 930, 180),
+        metavar=("X", "Y", "WIDTH", "HEIGHT"),
+        help="HD44780A00 text-line region",
+    )
     parser.add_argument("--show", action="store_true", help="display the original image in a window")
     args = parser.parse_args()
 
     image = load_grayscale(args.input)
+    height, width = image.shape
     save_image(args.output, image)
 
     output_dir = args.output.parent
@@ -219,7 +244,40 @@ def main():
         json.dumps(filter_metrics, indent=2) + "\n", encoding="utf-8"
     )
 
-    height, width = image.shape
+    roi_original = crop_roi(image, args.roi)
+    roi_stretched = crop_roi(stretched, args.roi)
+    roi_smoothed = crop_roi(mean_filtered[5], args.roi)
+    roi_original_path = output_dir / "08_roi_original.png"
+    roi_stretched_path = output_dir / "09_roi_contrast_stretch.png"
+    roi_smoothed_path = output_dir / "10_roi_mean_5x5.png"
+    save_image(roi_original_path, roi_original)
+    save_image(roi_stretched_path, roi_stretched)
+    save_image(roi_smoothed_path, roi_smoothed)
+
+    roi_comparison = np.vstack(
+        [
+            labeled_panel(roi_original, "Original ROI: HD44780A00"),
+            labeled_panel(roi_stretched, "Contrast-stretched ROI"),
+            labeled_panel(roi_smoothed, "5x5 mean-filtered ROI"),
+        ]
+    )
+    roi_comparison_path = output_dir / "task3_roi_comparison.png"
+    save_image(roi_comparison_path, roi_comparison)
+    roi_metadata_path = output_dir / "task3_roi_metadata.json"
+    roi_metadata_path.write_text(
+        json.dumps(
+            {
+                "roi_xywh": list(args.roi),
+                "source_image_size_wh": [width, height],
+                "cropped_image_size_wh": [roi_original.shape[1], roi_original.shape[0]],
+                "target_text": "HD44780A00",
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
     print(f"Loaded image: {args.input}")
     print(f"Image size: {width} x {height}")
     print(f"Saved grayscale original: {args.output}")
@@ -227,10 +285,13 @@ def main():
     print(f"Saved Task 1 metrics: {metrics_path}")
     print(f"Saved Task 2 comparison: {filter_comparison_path}")
     print(f"Saved Task 2 metrics: {filter_metrics_path}")
+    print(f"Saved Task 3 ROI comparison: {roi_comparison_path}")
+    print(f"Saved Task 3 ROI metadata: {roi_metadata_path}")
 
     if args.show:
         cv2.imshow("ME5411 - Task 1 contrast comparison", comparison)
         cv2.imshow("ME5411 - Task 2 averaging-filter comparison", filter_comparison)
+        cv2.imshow("ME5411 - Task 3 HD44780A00 ROI", roi_comparison)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
