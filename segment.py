@@ -1,317 +1,32 @@
+"""Run the complete ME5411 Task 1-6 character-processing pipeline."""
+
 import argparse
-import json
+import sys
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from common.pipeline_io import load_grayscale, save_image
+from task_01.enhance import run_task1
+from task_02.smooth import run_task2
+from task_03.crop import run_task3
+from task_04.binarize import run_task4
+from task_05.outline import run_task5
+from task_06.segment import run_task6
+
+
 DEFAULT_INPUT = PROJECT_ROOT / "Test_Image_2026.bmp"
 DEFAULT_OUTPUT = PROJECT_ROOT / "results" / "figures" / "01_original.png"
 
 
-def load_grayscale(path):
-    """Read a grayscale image, including paths containing non-ASCII text."""
-    path = Path(path)
-    if not path.is_file():
-        raise FileNotFoundError(f"无法读取图片：{path}")
-    encoded = np.fromfile(path, dtype=np.uint8)
-    image = cv2.imdecode(encoded, cv2.IMREAD_GRAYSCALE)
-    if image is None:
-        raise FileNotFoundError(f"无法读取图片：{path}")
-    return image
-
-
-def save_image(path, image):
-    """Save an image to a path that may contain non-ASCII text."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    extension = path.suffix or ".png"
-    success, encoded = cv2.imencode(extension, image)
-    if not success:
-        raise OSError(f"无法编码图片：{path}")
-    encoded.tofile(path)
-
-
-def contrast_stretch(image, low_percentile=1.0, high_percentile=99.0):
-    """Stretch the central intensity range to 0-255 to suppress outliers."""
-    low, high = np.percentile(image, [low_percentile, high_percentile])
-    if high <= low:
-        return image.copy()
-    stretched = (image.astype(np.float32) - low) * 255.0 / (high - low)
-    return np.clip(np.rint(stretched), 0, 255).astype(np.uint8)
-
-
-def histogram_equalization(image):
-    """Apply global histogram equalization using an explicit 256-bin CDF."""
-    histogram = np.bincount(image.ravel(), minlength=256)
-    cdf = histogram.cumsum()
-    nonzero = np.flatnonzero(histogram)
-    if nonzero.size < 2:
-        return image.copy()
-    cdf_min = cdf[nonzero[0]]
-    denominator = image.size - cdf_min
-    if denominator <= 0:
-        return image.copy()
-    lookup = np.clip(
-        np.rint((cdf - cdf_min) * 255.0 / denominator), 0, 255
-    ).astype(np.uint8)
-    return lookup[image]
-
-
-def image_statistics(image):
-    return {
-        "minimum": int(image.min()),
-        "maximum": int(image.max()),
-        "mean": round(float(image.mean()), 3),
-        "standard_deviation": round(float(image.std()), 3),
-    }
-
-
-def labeled_panel(image, label):
-    """Create a report-ready panel with a readable method label."""
-    panel = (
-        cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        if image.ndim == 2
-        else image.copy()
-    )
-    panel = cv2.copyMakeBorder(
-        panel, 38, 0, 0, 0, cv2.BORDER_CONSTANT, value=(0, 0, 0)
-    )
-    cv2.putText(
-        panel,
-        label,
-        (12, 27),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.72,
-        (255, 255, 255),
-        2,
-        cv2.LINE_AA,
-    )
-    return panel
-
-
-def crop_roi(image, roi):
-    """Crop an ``(x, y, width, height)`` region after validating its bounds."""
-    x, y, width, height = map(int, roi)
-    image_height, image_width = image.shape[:2]
-    if width <= 0 or height <= 0:
-        raise ValueError("ROI width and height must be positive")
-    if x < 0 or y < 0 or x + width > image_width or y + height > image_height:
-        raise ValueError(
-            f"ROI {(x, y, width, height)} exceeds image size "
-            f"{(image_width, image_height)}"
-        )
-    return image[y : y + height, x : x + width]
-
-
-def otsu_binarization(image):
-    """Return Otsu's threshold and a bright-foreground binary image."""
-    histogram = np.bincount(image.ravel(), minlength=256).astype(np.float64)
-    probabilities = histogram / image.size
-    levels = np.arange(256, dtype=np.float64)
-    cumulative_probability = probabilities.cumsum()
-    cumulative_mean = (probabilities * levels).cumsum()
-    total_mean = cumulative_mean[-1]
-    denominator = cumulative_probability * (1.0 - cumulative_probability)
-    between_class_variance = np.divide(
-        (total_mean * cumulative_probability - cumulative_mean) ** 2,
-        denominator,
-        out=np.zeros_like(denominator),
-        where=denominator > 0,
-    )
-    threshold = int(np.argmax(between_class_variance))
-    binary = np.where(image > threshold, 255, 0).astype(np.uint8)
-    return threshold, binary
-
-
-def adaptive_binarization(image, block_size=31, c=-5.0):
-    """Apply a local Gaussian threshold for uneven illumination."""
-    if block_size < 3 or block_size % 2 == 0:
-        raise ValueError("Adaptive-threshold block size must be odd and at least 3")
-    return cv2.adaptiveThreshold(
-        image,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        block_size,
-        c,
-    )
-
-
-def remove_small_components(binary, min_area=200):
-    """Remove connected foreground regions smaller than ``min_area`` pixels."""
-    component_count, labels, statistics, _ = cv2.connectedComponentsWithStats(
-        (binary > 0).astype(np.uint8), connectivity=8
-    )
-    cleaned = np.zeros_like(binary)
-    retained = []
-    for label in range(1, component_count):
-        area = int(statistics[label, cv2.CC_STAT_AREA])
-        if area >= min_area:
-            cleaned[labels == label] = 255
-            retained.append(area)
-    return cleaned, component_count - 1, retained
-
-
-def character_outlines(grayscale, cleaned_binary):
-    """Generate Sobel and binary-boundary outlines around character regions."""
-    gradient_x = cv2.Sobel(grayscale, cv2.CV_32F, 1, 0, ksize=3)
-    gradient_y = cv2.Sobel(grayscale, cv2.CV_32F, 0, 1, ksize=3)
-    magnitude = cv2.magnitude(gradient_x, gradient_y)
-    maximum = float(magnitude.max())
-    normalized = (
-        np.rint(magnitude * 255.0 / maximum).astype(np.uint8)
-        if maximum > 0
-        else np.zeros_like(grayscale)
-    )
-    sobel_threshold, sobel = otsu_binarization(normalized)
-    character_neighbourhood = cv2.dilate(
-        cleaned_binary, np.ones((5, 5), dtype=np.uint8), iterations=1
-    )
-    sobel = cv2.bitwise_and(sobel, character_neighbourhood)
-
-    eroded = cv2.erode(
-        cleaned_binary, np.ones((3, 3), dtype=np.uint8), iterations=1
-    )
-    morphological = cv2.subtract(cleaned_binary, eroded)
-    return sobel_threshold, sobel, morphological
-
-
-def _foreground_bbox(binary, x_start, x_end):
-    """Return a tight foreground box inside the half-open x interval."""
-    region = binary[:, x_start:x_end] > 0
-    rows, columns = np.nonzero(region)
-    if rows.size == 0:
-        return None
-    x0 = x_start + int(columns.min())
-    x1 = x_start + int(columns.max()) + 1
-    y0 = int(rows.min())
-    y1 = int(rows.max()) + 1
-    return x0, y0, x1 - x0, y1 - y0
-
-
-def segment_character_boxes(cleaned_binary, expected_count=10):
-    """Split wide connected regions at central vertical-projection valleys."""
-    count, _, statistics, _ = cv2.connectedComponentsWithStats(
-        (cleaned_binary > 0).astype(np.uint8), connectivity=8
-    )
-    components = []
-    for label in range(1, count):
-        x, y, width, height, area = map(int, statistics[label])
-        components.append({"x": x, "y": y, "width": width, "height": height, "area": area})
-    components.sort(key=lambda item: item["x"])
-    if not components:
-        raise ValueError("No foreground components are available for character segmentation")
-
-    component_widths = np.asarray([item["width"] for item in components], dtype=np.float32)
-    typical_width = float(np.median(component_widths))
-    projection = (cleaned_binary > 0).sum(axis=0)
-    boxes = []
-    split_columns = []
-
-    for component in components:
-        x = component["x"]
-        width = component["width"]
-        estimated_characters = max(1, int(round(width / typical_width)))
-        if estimated_characters == 1:
-            box = _foreground_bbox(cleaned_binary, x, x + width)
-            if box is not None:
-                boxes.append(box)
-            continue
-
-        boundaries = [x]
-        for part in range(1, estimated_characters):
-            expected = x + width * part / estimated_characters
-            half_window = max(2, int(round(width * 0.10)))
-            search_start = max(x + 1, int(round(expected)) - half_window)
-            search_end = min(x + width - 1, int(round(expected)) + half_window + 1)
-            candidates = np.arange(search_start, search_end)
-            cut = int(candidates[np.argmin(projection[candidates])])
-            boundaries.append(cut)
-            split_columns.append(cut)
-        boundaries.append(x + width)
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            box = _foreground_bbox(cleaned_binary, start, end)
-            if box is not None:
-                boxes.append(box)
-
-    boxes.sort(key=lambda item: item[0])
-    if len(boxes) != expected_count:
-        raise ValueError(
-            f"Expected {expected_count} character boxes, obtained {len(boxes)}; "
-            "adjust preprocessing or the ROI"
-        )
-    return boxes, typical_width, split_columns
-
-
-def crop_with_padding(image, box, padding=6):
-    x, y, width, height = box
-    image_height, image_width = image.shape[:2]
-    x0, y0 = max(0, x - padding), max(0, y - padding)
-    x1 = min(image_width, x + width + padding)
-    y1 = min(image_height, y + height + padding)
-    return image[y0:y1, x0:x1]
-
-
-def normalize_character_crop(crop, canvas_size=96, margin=8):
-    """Fit a binary crop onto a square canvas without changing its aspect ratio."""
-    height, width = crop.shape
-    available = canvas_size - 2 * margin
-    scale = min(available / max(1, width), available / max(1, height))
-    resized_width = max(1, int(round(width * scale)))
-    resized_height = max(1, int(round(height * scale)))
-    resized = cv2.resize(
-        crop, (resized_width, resized_height), interpolation=cv2.INTER_NEAREST
-    )
-    canvas = np.zeros((canvas_size, canvas_size), dtype=np.uint8)
-    x0 = (canvas_size - resized_width) // 2
-    y0 = (canvas_size - resized_height) // 2
-    canvas[y0 : y0 + resized_height, x0 : x0 + resized_width] = resized
-    return canvas
-
-# 2. 定义一个均值滤波器类
-class AveragingFilter:
-    def __init__(self, size):
-        if size < 1 or size % 2 == 0:
-            raise ValueError("Averaging-filter size must be a positive odd integer")
-        self.size = size
-        self.kernel = np.ones((size, size), dtype=np.float32) / (size * size)
-
-    def __call__(self, image):
-        return cv2.filter2D(src=image, ddepth=-1, kernel=self.kernel, borderType=cv2.BORDER_REFLECT)
-# 3. 对比度增强类
-class ContrastEnhancement:
-    def __init__(self, alpha=1.5, beta=0):
-        self.alpha = alpha  # 对比度控制
-        self.beta = beta    # 亮度控制
-
-    def __call__(self, image):
-        return cv2.convertScaleAbs(image, alpha=self.alpha, beta=self.beta)
-# 4. 平均灰度对比度增强类
-class CenterContrastEnhancement:
-    def __init__(self, alpha=1.5, beta=0):
-        self.alpha = alpha  # 对比度控制
-        self.beta = beta    # 亮度控制
-
-    def __call__(self, image):
-        mean_intensity = np.mean(image)
-        enhanced_image = self.alpha*(image - mean_intensity) + mean_intensity + self.beta
-        return np.clip(enhanced_image, 0, 255).astype(np.uint8)
-# 5. 二值化处理类
-class Binarization:
-    def __init__(self, threshold=127):
-        self.threshold = threshold
-
-    def __call__(self, image):
-        _, binary_image = cv2.threshold(image, self.threshold, 255, cv2.THRESH_BINARY)
-        return binary_image
-# 6.图形分割
-
-
 def main():
-    parser = argparse.ArgumentParser(description="ME5411 character-processing pipeline")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="input chip image")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="saved grayscale image")
     parser.add_argument(
@@ -340,334 +55,69 @@ def main():
         default=200,
         help="minimum connected-component area retained before outline extraction",
     )
-    parser.add_argument("--show", action="store_true", help="display the original image in a window")
+    parser.add_argument("--show", action="store_true", help="display all task comparisons")
     args = parser.parse_args()
 
     image = load_grayscale(args.input)
     height, width = image.shape
     save_image(args.output, image)
-
     output_dir = args.output.parent
-    stretched = contrast_stretch(image)
-    equalized = histogram_equalization(image)
-    centered = CenterContrastEnhancement(alpha=1.5)(image)
 
-    stretch_path = output_dir / "02_contrast_stretch.png"
-    equalized_path = output_dir / "03_hist_equalized.png"
-    centered_path = output_dir / "04_centered_contrast.png"
-    comparison_path = output_dir / "task1_contrast_comparison.png"
-    metrics_path = output_dir / "task1_contrast_metrics.json"
-
-    save_image(stretch_path, stretched)
-    save_image(equalized_path, equalized)
-    save_image(centered_path, centered)
-
-    top = np.hstack(
-        [labeled_panel(image, "Original"), labeled_panel(stretched, "1%-99% contrast stretch")]
+    task1 = run_task1(image, output_dir)
+    task2 = run_task2(task1["stretched"], output_dir)
+    task3 = run_task3(
+        image,
+        task1["stretched"],
+        task2["mean_filtered"][5],
+        args.roi,
+        output_dir,
     )
-    bottom = np.hstack(
-        [labeled_panel(equalized, "Histogram equalization"), labeled_panel(centered, "Mean-centered alpha=1.5")]
+    task4 = run_task4(
+        task3["smoothed"],
+        output_dir,
+        adaptive_block_size=args.adaptive_block_size,
+        adaptive_c=args.adaptive_c,
     )
-    comparison = np.vstack([top, bottom])
-    comparison = cv2.resize(comparison, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-    save_image(comparison_path, comparison)
-
-    metrics = {
-        "original": image_statistics(image),
-        "contrast_stretch_1_99_percentile": image_statistics(stretched),
-        "histogram_equalization": image_statistics(equalized),
-        "mean_centered_alpha_1_5": image_statistics(centered),
-    }
-    metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
-
-    mean_filtered = {
-        size: AveragingFilter(size)(stretched)
-        for size in (3, 5, 7)
-    }
-    output_numbers = {3: 5, 5: 6, 7: 7}
-    for size, filtered_image in mean_filtered.items():
-        save_image(
-            output_dir / f"{output_numbers[size]:02d}_mean_{size}x{size}.png",
-            filtered_image,
-        )
-
-    filter_comparison = np.vstack(
-        [
-            np.hstack(
-                [
-                    labeled_panel(stretched, "Contrast-stretched input"),
-                    labeled_panel(mean_filtered[3], "3x3 averaging filter"),
-                ]
-            ),
-            np.hstack(
-                [
-                    labeled_panel(mean_filtered[5], "5x5 averaging filter"),
-                    labeled_panel(mean_filtered[7], "7x7 averaging filter"),
-                ]
-            ),
-        ]
+    task5 = run_task5(
+        task3["smoothed"],
+        task3["original"],
+        task4["binary_otsu"],
+        output_dir,
+        min_noise_area=args.min_noise_area,
     )
-    filter_comparison = cv2.resize(
-        filter_comparison, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA
-    )
-    filter_comparison_path = output_dir / "task2_mean_filter_comparison.png"
-    save_image(filter_comparison_path, filter_comparison)
-
-    filter_metrics = {}
-    source_float = stretched.astype(np.float32)
-    for name, filtered_image in {
-        "unfiltered_contrast_stretch": stretched,
-        **{f"mean_{size}x{size}": image for size, image in mean_filtered.items()},
-    }.items():
-        residual = source_float - filtered_image.astype(np.float32)
-        filter_metrics[name] = {
-            **image_statistics(filtered_image),
-            "laplacian_variance": round(
-                float(cv2.Laplacian(filtered_image, cv2.CV_64F).var()), 3
-            ),
-            "residual_standard_deviation": round(float(residual.std()), 3),
-        }
-    filter_metrics_path = output_dir / "task2_mean_filter_metrics.json"
-    filter_metrics_path.write_text(
-        json.dumps(filter_metrics, indent=2) + "\n", encoding="utf-8"
-    )
-
-    roi_original = crop_roi(image, args.roi)
-    roi_stretched = crop_roi(stretched, args.roi)
-    roi_smoothed = crop_roi(mean_filtered[5], args.roi)
-    roi_original_path = output_dir / "08_roi_original.png"
-    roi_stretched_path = output_dir / "09_roi_contrast_stretch.png"
-    roi_smoothed_path = output_dir / "10_roi_mean_5x5.png"
-    save_image(roi_original_path, roi_original)
-    save_image(roi_stretched_path, roi_stretched)
-    save_image(roi_smoothed_path, roi_smoothed)
-
-    roi_comparison = np.vstack(
-        [
-            labeled_panel(roi_original, "Original ROI: HD44780A00"),
-            labeled_panel(roi_stretched, "Contrast-stretched ROI"),
-            labeled_panel(roi_smoothed, "5x5 mean-filtered ROI"),
-        ]
-    )
-    roi_comparison_path = output_dir / "task3_roi_comparison.png"
-    save_image(roi_comparison_path, roi_comparison)
-    roi_metadata_path = output_dir / "task3_roi_metadata.json"
-    roi_metadata_path.write_text(
-        json.dumps(
-            {
-                "roi_xywh": list(args.roi),
-                "source_image_size_wh": [width, height],
-                "cropped_image_size_wh": [roi_original.shape[1], roi_original.shape[0]],
-                "target_text": "HD44780A00",
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    otsu_threshold, binary_otsu = otsu_binarization(roi_smoothed)
-    binary_adaptive = adaptive_binarization(
-        roi_smoothed, args.adaptive_block_size, args.adaptive_c
-    )
-    binary_otsu_path = output_dir / "11_binary_otsu.png"
-    binary_adaptive_path = output_dir / "12_binary_adaptive.png"
-    save_image(binary_otsu_path, binary_otsu)
-    save_image(binary_adaptive_path, binary_adaptive)
-
-    binary_comparison = np.vstack(
-        [
-            labeled_panel(roi_smoothed, "5x5 mean-filtered ROI"),
-            labeled_panel(binary_otsu, f"Otsu threshold = {otsu_threshold}"),
-            labeled_panel(
-                binary_adaptive,
-                f"Adaptive Gaussian: block={args.adaptive_block_size}, C={args.adaptive_c:g}",
-            ),
-        ]
-    )
-    binary_comparison_path = output_dir / "task4_binarization_comparison.png"
-    save_image(binary_comparison_path, binary_comparison)
-    binary_metrics_path = output_dir / "task4_binarization_metrics.json"
-    binary_metrics_path.write_text(
-        json.dumps(
-            {
-                "otsu": {
-                    "threshold": otsu_threshold,
-                    "foreground_fraction": round(float((binary_otsu > 0).mean()), 6),
-                },
-                "adaptive_gaussian": {
-                    "block_size": args.adaptive_block_size,
-                    "c": args.adaptive_c,
-                    "foreground_fraction": round(
-                        float((binary_adaptive > 0).mean()), 6
-                    ),
-                },
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    cleaned_binary, component_count_before, retained_areas = remove_small_components(
-        binary_otsu, args.min_noise_area
-    )
-    sobel_threshold, sobel_outline, morphological_outline = character_outlines(
-        roi_smoothed, cleaned_binary
-    )
-    contours, _ = cv2.findContours(
-        cleaned_binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
-    )
-    contour_overlay = cv2.cvtColor(roi_original, cv2.COLOR_GRAY2BGR)
-    cv2.drawContours(contour_overlay, contours, -1, (0, 255, 0), thickness=2)
-
-    cleaned_binary_path = output_dir / "13_binary_cleaned.png"
-    sobel_outline_path = output_dir / "14_outline_sobel.png"
-    morphological_outline_path = output_dir / "15_outline_morphological.png"
-    contour_overlay_path = output_dir / "16_contour_overlay.png"
-    save_image(cleaned_binary_path, cleaned_binary)
-    save_image(sobel_outline_path, sobel_outline)
-    save_image(morphological_outline_path, morphological_outline)
-    save_image(contour_overlay_path, contour_overlay)
-
-    outline_comparison = np.vstack(
-        [
-            np.hstack(
-                [
-                    labeled_panel(cleaned_binary, "Cleaned Otsu binary"),
-                    labeled_panel(sobel_outline, "Masked Sobel outline"),
-                ]
-            ),
-            np.hstack(
-                [
-                    labeled_panel(morphological_outline, "Morphological outline"),
-                    labeled_panel(contour_overlay, "Contours on original ROI"),
-                ]
-            ),
-        ]
-    )
-    outline_comparison = cv2.resize(
-        outline_comparison, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA
-    )
-    outline_comparison_path = output_dir / "task5_outline_comparison.png"
-    save_image(outline_comparison_path, outline_comparison)
-    outline_metrics_path = output_dir / "task5_outline_metrics.json"
-    outline_metrics_path.write_text(
-        json.dumps(
-            {
-                "minimum_component_area": args.min_noise_area,
-                "components_before_cleanup": component_count_before,
-                "components_retained": len(retained_areas),
-                "retained_component_areas": retained_areas,
-                "sobel_threshold": sobel_threshold,
-                "contours_drawn_including_inner_boundaries": len(contours),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    target_text = "HD44780A00"
-    character_boxes, typical_character_width, split_columns = segment_character_boxes(
-        cleaned_binary, expected_count=len(target_text)
-    )
-    character_dir = output_dir / "characters"
-    character_dir.mkdir(parents=True, exist_ok=True)
-    labelled_overlay = cv2.cvtColor(roi_original, cv2.COLOR_GRAY2BGR)
-    strip_panels = []
-    character_metadata = []
-    colours = [
-        (0, 255, 0),
-        (255, 128, 0),
-        (0, 128, 255),
-        (255, 0, 255),
-        (0, 255, 255),
-    ]
-    for index, (character, box) in enumerate(
-        zip(target_text, character_boxes), start=1
-    ):
-        x, y, box_width, box_height = box
-        crop = crop_with_padding(cleaned_binary, box)
-        crop_path = character_dir / f"{index:02d}_{character}.png"
-        save_image(crop_path, crop)
-        strip_panels.append(
-            labeled_panel(normalize_character_crop(crop), f"{index}: {character}")
-        )
-        colour = colours[(index - 1) % len(colours)]
-        cv2.rectangle(
-            labelled_overlay,
-            (x, y),
-            (x + box_width - 1, y + box_height - 1),
-            colour,
-            thickness=2,
-        )
-        cv2.putText(
-            labelled_overlay,
-            f"{index}:{character}",
-            (x, max(16, y - 5)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            colour,
-            2,
-            cv2.LINE_AA,
-        )
-        character_metadata.append(
-            {
-                "index": index,
-                "label": character,
-                "bbox_xywh": list(box),
-                "crop_file": str(crop_path.relative_to(PROJECT_ROOT)),
-            }
-        )
-
-    labelled_overlay_path = output_dir / "17_labeled_characters.png"
-    character_strip_path = output_dir / "task6_character_strip.png"
-    save_image(labelled_overlay_path, labelled_overlay)
-    character_strip = np.hstack(strip_panels)
-    save_image(character_strip_path, character_strip)
-    segmentation_metadata_path = output_dir / "task6_segmentation_metadata.json"
-    segmentation_metadata_path.write_text(
-        json.dumps(
-            {
-                "target_text": target_text,
-                "detected_character_count": len(character_boxes),
-                "connected_components_before_splitting": len(retained_areas),
-                "typical_component_width": round(typical_character_width, 3),
-                "projection_split_columns": split_columns,
-                "characters": character_metadata,
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    task6 = run_task6(
+        task3["original"],
+        task5["cleaned_binary"],
+        task5["retained_areas"],
+        output_dir,
+        PROJECT_ROOT,
     )
 
     print(f"Loaded image: {args.input}")
     print(f"Image size: {width} x {height}")
     print(f"Saved grayscale original: {args.output}")
-    print(f"Saved Task 1 comparison: {comparison_path}")
-    print(f"Saved Task 1 metrics: {metrics_path}")
-    print(f"Saved Task 2 comparison: {filter_comparison_path}")
-    print(f"Saved Task 2 metrics: {filter_metrics_path}")
-    print(f"Saved Task 3 ROI comparison: {roi_comparison_path}")
-    print(f"Saved Task 3 ROI metadata: {roi_metadata_path}")
-    print(f"Saved Task 4 binarization comparison: {binary_comparison_path}")
-    print(f"Saved Task 4 binarization metrics: {binary_metrics_path}")
-    print(f"Saved Task 5 outline comparison: {outline_comparison_path}")
-    print(f"Saved Task 5 outline metrics: {outline_metrics_path}")
-    print(f"Saved Task 6 labelled characters: {labelled_overlay_path}")
-    print(f"Saved Task 6 character strip: {character_strip_path}")
-    print(f"Saved Task 6 segmentation metadata: {segmentation_metadata_path}")
+    print(f"Saved Task 1 comparison: {task1['comparison_path']}")
+    print(f"Saved Task 1 metrics: {task1['metrics_path']}")
+    print(f"Saved Task 2 comparison: {task2['comparison_path']}")
+    print(f"Saved Task 2 metrics: {task2['metrics_path']}")
+    print(f"Saved Task 3 ROI comparison: {task3['comparison_path']}")
+    print(f"Saved Task 3 ROI metadata: {task3['metadata_path']}")
+    print(f"Saved Task 4 binarization comparison: {task4['comparison_path']}")
+    print(f"Saved Task 4 binarization metrics: {task4['metrics_path']}")
+    print(f"Saved Task 5 outline comparison: {task5['comparison_path']}")
+    print(f"Saved Task 5 outline metrics: {task5['metrics_path']}")
+    print(f"Saved Task 6 labelled characters: {task6['labelled_overlay_path']}")
+    print(f"Saved Task 6 character strip: {task6['character_strip_path']}")
+    print(f"Saved Task 6 segmentation metadata: {task6['metadata_path']}")
 
     if args.show:
-        cv2.imshow("ME5411 - Task 1 contrast comparison", comparison)
-        cv2.imshow("ME5411 - Task 2 averaging-filter comparison", filter_comparison)
-        cv2.imshow("ME5411 - Task 3 HD44780A00 ROI", roi_comparison)
-        cv2.imshow("ME5411 - Task 4 binarization", binary_comparison)
-        cv2.imshow("ME5411 - Task 5 character outlines", outline_comparison)
-        cv2.imshow("ME5411 - Task 6 labelled characters", labelled_overlay)
-        cv2.imshow("ME5411 - Task 6 character crops", character_strip)
+        cv2.imshow("ME5411 - Task 1 contrast comparison", task1["comparison"])
+        cv2.imshow("ME5411 - Task 2 averaging-filter comparison", task2["comparison"])
+        cv2.imshow("ME5411 - Task 3 HD44780A00 ROI", task3["comparison"])
+        cv2.imshow("ME5411 - Task 4 binarization", task4["comparison"])
+        cv2.imshow("ME5411 - Task 5 character outlines", task5["comparison"])
+        cv2.imshow("ME5411 - Task 6 labelled characters", task6["labelled_overlay"])
+        cv2.imshow("ME5411 - Task 6 character crops", task6["character_strip"])
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 

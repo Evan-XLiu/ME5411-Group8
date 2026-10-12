@@ -1,4 +1,4 @@
-"""Task 5 - a reproducible PyTorch CNN baseline for segmented characters.
+"""Task 7-1 - a reproducible PyTorch CNN for segmented characters.
 
 Dataset layout::
 
@@ -27,7 +27,7 @@ def _torch():
         import torch.nn as nn
         from torch.utils.data import DataLoader, TensorDataset
     except ImportError as exc:  # pragma: no cover - environment dependent
-        raise RuntimeError("Task 5 requires torch. Install requirements.txt or the CPU PyTorch build.") from exc
+        raise RuntimeError("Task 7 CNN requires torch. Install requirements.txt or the CPU PyTorch build.") from exc
     return torch, nn, DataLoader, TensorDataset
 
 

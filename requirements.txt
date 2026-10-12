@@ -1,7 +1,8 @@
-# Core Tasks 1-4 and Task 6
+# Tasks 1-6 image-processing pipeline
 numpy>=1.23
+opencv-python>=4.8
 Pillow>=9.0
-scikit-learn>=1.1  # optional: Task 6 falls back to nearest-centroid without it
 
-# Task 5 (install the CPU or CUDA build appropriate for the machine)
+# Task 7 classifiers
+scikit-learn>=1.1  # optional: the classical model can use nearest-centroid
 torch>=2.0

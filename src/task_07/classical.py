@@ -1,4 +1,4 @@
-"""Task 6 - non-CNN character recognition with HOG and SVM/nearest-centroid.
+"""Task 7-2 - non-CNN character recognition with HOG and SVM/nearest-centroid.
 
 An RBF SVM is used when scikit-learn is available. A deterministic nearest
 centroid classifier is retained as a dependency-free fallback so the project
