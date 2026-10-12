@@ -101,6 +101,40 @@ def crop_roi(image, roi):
         )
     return image[y : y + height, x : x + width]
 
+
+def otsu_binarization(image):
+    """Return Otsu's threshold and a bright-foreground binary image."""
+    histogram = np.bincount(image.ravel(), minlength=256).astype(np.float64)
+    probabilities = histogram / image.size
+    levels = np.arange(256, dtype=np.float64)
+    cumulative_probability = probabilities.cumsum()
+    cumulative_mean = (probabilities * levels).cumsum()
+    total_mean = cumulative_mean[-1]
+    denominator = cumulative_probability * (1.0 - cumulative_probability)
+    between_class_variance = np.divide(
+        (total_mean * cumulative_probability - cumulative_mean) ** 2,
+        denominator,
+        out=np.zeros_like(denominator),
+        where=denominator > 0,
+    )
+    threshold = int(np.argmax(between_class_variance))
+    binary = np.where(image > threshold, 255, 0).astype(np.uint8)
+    return threshold, binary
+
+
+def adaptive_binarization(image, block_size=31, c=-5.0):
+    """Apply a local Gaussian threshold for uneven illumination."""
+    if block_size < 3 or block_size % 2 == 0:
+        raise ValueError("Adaptive-threshold block size must be odd and at least 3")
+    return cv2.adaptiveThreshold(
+        image,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        block_size,
+        c,
+    )
+
 # 2. 定义一个均值滤波器类
 class AveragingFilter:
     def __init__(self, size):
@@ -151,6 +185,18 @@ def main():
         default=(45, 180, 930, 180),
         metavar=("X", "Y", "WIDTH", "HEIGHT"),
         help="HD44780A00 text-line region",
+    )
+    parser.add_argument(
+        "--adaptive-block-size",
+        type=int,
+        default=31,
+        help="odd neighbourhood size for adaptive thresholding",
+    )
+    parser.add_argument(
+        "--adaptive-c",
+        type=float,
+        default=-5.0,
+        help="constant subtracted from the adaptive local threshold",
     )
     parser.add_argument("--show", action="store_true", help="display the original image in a window")
     args = parser.parse_args()
@@ -278,6 +324,49 @@ def main():
         encoding="utf-8",
     )
 
+    otsu_threshold, binary_otsu = otsu_binarization(roi_smoothed)
+    binary_adaptive = adaptive_binarization(
+        roi_smoothed, args.adaptive_block_size, args.adaptive_c
+    )
+    binary_otsu_path = output_dir / "11_binary_otsu.png"
+    binary_adaptive_path = output_dir / "12_binary_adaptive.png"
+    save_image(binary_otsu_path, binary_otsu)
+    save_image(binary_adaptive_path, binary_adaptive)
+
+    binary_comparison = np.vstack(
+        [
+            labeled_panel(roi_smoothed, "5x5 mean-filtered ROI"),
+            labeled_panel(binary_otsu, f"Otsu threshold = {otsu_threshold}"),
+            labeled_panel(
+                binary_adaptive,
+                f"Adaptive Gaussian: block={args.adaptive_block_size}, C={args.adaptive_c:g}",
+            ),
+        ]
+    )
+    binary_comparison_path = output_dir / "task4_binarization_comparison.png"
+    save_image(binary_comparison_path, binary_comparison)
+    binary_metrics_path = output_dir / "task4_binarization_metrics.json"
+    binary_metrics_path.write_text(
+        json.dumps(
+            {
+                "otsu": {
+                    "threshold": otsu_threshold,
+                    "foreground_fraction": round(float((binary_otsu > 0).mean()), 6),
+                },
+                "adaptive_gaussian": {
+                    "block_size": args.adaptive_block_size,
+                    "c": args.adaptive_c,
+                    "foreground_fraction": round(
+                        float((binary_adaptive > 0).mean()), 6
+                    ),
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
     print(f"Loaded image: {args.input}")
     print(f"Image size: {width} x {height}")
     print(f"Saved grayscale original: {args.output}")
@@ -287,11 +376,14 @@ def main():
     print(f"Saved Task 2 metrics: {filter_metrics_path}")
     print(f"Saved Task 3 ROI comparison: {roi_comparison_path}")
     print(f"Saved Task 3 ROI metadata: {roi_metadata_path}")
+    print(f"Saved Task 4 binarization comparison: {binary_comparison_path}")
+    print(f"Saved Task 4 binarization metrics: {binary_metrics_path}")
 
     if args.show:
         cv2.imshow("ME5411 - Task 1 contrast comparison", comparison)
         cv2.imshow("ME5411 - Task 2 averaging-filter comparison", filter_comparison)
         cv2.imshow("ME5411 - Task 3 HD44780A00 ROI", roi_comparison)
+        cv2.imshow("ME5411 - Task 4 binarization", binary_comparison)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
