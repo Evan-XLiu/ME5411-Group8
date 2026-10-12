@@ -1,4 +1,5 @@
 import argparse
+import json
 from pathlib import Path
 
 import cv2
@@ -31,6 +32,58 @@ def save_image(path, image):
     if not success:
         raise OSError(f"无法编码图片：{path}")
     encoded.tofile(path)
+
+
+def contrast_stretch(image, low_percentile=1.0, high_percentile=99.0):
+    """Stretch the central intensity range to 0-255 to suppress outliers."""
+    low, high = np.percentile(image, [low_percentile, high_percentile])
+    if high <= low:
+        return image.copy()
+    stretched = (image.astype(np.float32) - low) * 255.0 / (high - low)
+    return np.clip(np.rint(stretched), 0, 255).astype(np.uint8)
+
+
+def histogram_equalization(image):
+    """Apply global histogram equalization using an explicit 256-bin CDF."""
+    histogram = np.bincount(image.ravel(), minlength=256)
+    cdf = histogram.cumsum()
+    nonzero = np.flatnonzero(histogram)
+    if nonzero.size < 2:
+        return image.copy()
+    cdf_min = cdf[nonzero[0]]
+    denominator = image.size - cdf_min
+    if denominator <= 0:
+        return image.copy()
+    lookup = np.clip(
+        np.rint((cdf - cdf_min) * 255.0 / denominator), 0, 255
+    ).astype(np.uint8)
+    return lookup[image]
+
+
+def image_statistics(image):
+    return {
+        "minimum": int(image.min()),
+        "maximum": int(image.max()),
+        "mean": round(float(image.mean()), 3),
+        "standard_deviation": round(float(image.std()), 3),
+    }
+
+
+def labeled_panel(image, label):
+    """Create a report-ready panel with a readable method label."""
+    panel = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    cv2.rectangle(panel, (0, 0), (360, 38), (0, 0, 0), thickness=-1)
+    cv2.putText(
+        panel,
+        label,
+        (12, 27),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.72,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    return panel
 
 # 2. 定义一个均值滤波器类
 class AveragingFilter:
@@ -79,13 +132,48 @@ def main():
     image = load_grayscale(args.input)
     save_image(args.output, image)
 
+    output_dir = args.output.parent
+    stretched = contrast_stretch(image)
+    equalized = histogram_equalization(image)
+    centered = CenterContrastEnhancement(alpha=1.5)(image)
+
+    stretch_path = output_dir / "02_contrast_stretch.png"
+    equalized_path = output_dir / "03_hist_equalized.png"
+    centered_path = output_dir / "04_centered_contrast.png"
+    comparison_path = output_dir / "task1_contrast_comparison.png"
+    metrics_path = output_dir / "task1_contrast_metrics.json"
+
+    save_image(stretch_path, stretched)
+    save_image(equalized_path, equalized)
+    save_image(centered_path, centered)
+
+    top = np.hstack(
+        [labeled_panel(image, "Original"), labeled_panel(stretched, "1%-99% contrast stretch")]
+    )
+    bottom = np.hstack(
+        [labeled_panel(equalized, "Histogram equalization"), labeled_panel(centered, "Mean-centered alpha=1.5")]
+    )
+    comparison = np.vstack([top, bottom])
+    comparison = cv2.resize(comparison, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+    save_image(comparison_path, comparison)
+
+    metrics = {
+        "original": image_statistics(image),
+        "contrast_stretch_1_99_percentile": image_statistics(stretched),
+        "histogram_equalization": image_statistics(equalized),
+        "mean_centered_alpha_1_5": image_statistics(centered),
+    }
+    metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+
     height, width = image.shape
     print(f"Loaded image: {args.input}")
     print(f"Image size: {width} x {height}")
     print(f"Saved grayscale original: {args.output}")
+    print(f"Saved Task 1 comparison: {comparison_path}")
+    print(f"Saved Task 1 metrics: {metrics_path}")
 
     if args.show:
-        cv2.imshow("ME5411 - Original grayscale image", image)
+        cv2.imshow("ME5411 - Task 1 contrast comparison", comparison)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
