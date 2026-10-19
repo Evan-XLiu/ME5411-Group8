@@ -60,34 +60,31 @@ piecewise-linear contrast transform
   {r_{\max}-r_{\min}},0,255\right).
   \label{eq:stretch}
 \end{equation}
-The input limits are measured from the image unless explicitly supplied. A
-histogram-equalisation alternative is also implemented for images whose
-histogram occupies only a narrow range. Task 2 provides the normalized
-$3\times3$ (or arbitrary odd-size) averaging mask from the lectures, a
-separable Gaussian mask, a median filter for impulse noise, and the rotating
-mask average that chooses the locally most homogeneous window. The selected
-filter and size are recorded in the command line used for an experiment.
+Here, $r_{\min}$ and $r_{\max}$ are the first and ninety-ninth intensity
+percentiles, which reduces the influence of outliers. Histogram equalisation
+and mean-centred contrast scaling with $\alpha=1.5$ are generated for
+comparison. Task 2 applies normalized $3\times3$, $5\times5$, and $7\times7$
+averaging masks to the contrast-stretched image. The comparison records the
+trade-off between noise suppression and edge sharpness.
 
 \subsection{Region of Interest and Binarization}
-Task 3 accepts an explicit $(x,y,w,h)$ text-line ROI so that camera-specific
-geometry is not hidden in the algorithm. When no ROI is supplied the full image
-is used. Otsu's between-class variance selects a global threshold automatically;
-local mean thresholding is available when illumination varies across the chip.
-Both bright-on-dark and dark-on-bright text are supported. Foreground pixels are
-stored as one (and written as 255 in PNG files).
+Task 3 crops the explicit $(x,y,w,h)$ region containing the text
+HD44780A00 from the original, contrast-stretched, and $5\times5$ smoothed
+images. Task 4 applies Otsu's between-class variance method and adaptive
+Gaussian thresholding to the smoothed ROI. Foreground pixels are written as
+255 in the diagnostic PNG files.
 
 \subsection{Outline Extraction and Character Segmentation}
-Task 4 computes the horizontal and vertical Sobel responses and their gradient
-magnitude, yielding the outline diagnostic required by the segmentation
-lectures. The binary foreground is then labelled with either 4- or
-8-connectivity using a flood-fill implementation. Components smaller than the
-configurable area threshold are rejected as noise. Each remaining component is
-sorted left-to-right, padded, and exported as a character crop together with
-its bounding box, centroid, area, and perimeter in JSON. These diagnostics make
-merged or split characters visible before model training.
+Task 5 removes 8-connected foreground components smaller than the configurable
+area threshold. It compares a masked Sobel magnitude with the morphological
+boundary of the cleaned binary image and draws the detected contours on the
+original ROI. Task 6 sorts the retained components from left to right. Wide
+components containing touching characters are split at minima in the vertical
+projection. The ten resulting characters are padded, exported separately, and
+recorded with bounding boxes in JSON.
 
 \subsection{CNN Classifier}
-Task 5 resizes each crop to $32\times32$ and scales intensities to $[0,1]$.
+Task 7-1 resizes each crop to $32\times32$ and scales intensities to $[0,1]$.
 The network has three convolutional blocks (16, 32, and 64 channels), batch
 normalisation/ReLU, max pooling, adaptive average pooling, and two fully
 connected layers. Cross-entropy loss is optimized with Adam (learning rate
@@ -95,7 +92,7 @@ $10^{-3}$ by default), using a fixed seed and a stratified 80/20 split. A
 checkpoint stores the class names, preprocessing size, seed, and epoch history.
 
 \subsection{Non-CNN Classifier}
-Task 6 uses a 32-by-32 unsigned-gradient HOG descriptor (4-pixel cells and nine
+Task 7-2 uses a 32-by-32 unsigned-gradient HOG descriptor (4-pixel cells and nine
 orientation bins). An RBF SVM with $C=10$ is used when scikit-learn is present;
 the same interface falls back to a nearest-centroid classifier for a minimal
 installation. The feature extractor, split seed, classifier type, and accuracy
@@ -137,28 +134,25 @@ improvements.
 
 \section*{Code Execution Guide}
 Install the dependencies listed in \texttt{requirements.txt}, then run the
-following from the repository root with \texttt{PYTHONPATH=src}:
+Task 1--6 pipeline from the repository root:
 
 \begingroup
 \scriptsize
 \begin{verbatim}
-python -m task_01.enhance --input data/raw/chip.png \
-  --output results/figures/enhanced.png
-python -m task_02.smooth --input results/figures/enhanced.png \
-  --output results/figures/smoothed.png --method gaussian --size 3
-python -m task_03.threshold --input results/figures/smoothed.png \
-  --output results/figures/binary.png --method otsu
-python -m task_04.segment --input results/figures/binary.png \
-  --output-dir data/processed/characters
-python -m task_05.cnn --data data/processed/characters \
+python segment.py
+python segment.py --show
+
+# Task 7 (after preparing a larger labelled character data set)
+set PYTHONPATH=src
+python -m task_07.cnn --data data/processed/characters \
   --model results/models/character_cnn.pt
-python -m task_06.classical train --data data/processed/characters \
+python -m task_07.classical train --data data/processed/characters \
   --model results/models/hog_svm.pkl
 \end{verbatim}
 \endgroup
 
 The classifier data set has one directory per character (for example
-\texttt{characters/A/*.png}). Task 4 crops are assigned to these directories
+\texttt{characters/A/*.png}). Task 6 crops are assigned to these directories
 using the available ground truth before training. Every command accepts a
 \texttt{--help} page with parameter defaults and writes generated artifacts only
 under \texttt{results/} or \texttt{data/processed/}.

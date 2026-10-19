@@ -1,0 +1,34 @@
+{
+  "unfiltered_contrast_stretch": {
+    "minimum": 0,
+    "maximum": 255,
+    "mean": 79.592,
+    "standard_deviation": 55.169,
+    "laplacian_variance": 1018.917,
+    "residual_standard_deviation": 0.0
+  },
+  "mean_3x3": {
+    "minimum": 0,
+    "maximum": 255,
+    "mean": 79.592,
+    "standard_deviation": 52.946,
+    "laplacian_variance": 134.982,
+    "residual_standard_deviation": 8.486
+  },
+  "mean_5x5": {
+    "minimum": 0,
+    "maximum": 255,
+    "mean": 79.592,
+    "standard_deviation": 50.944,
+    "laplacian_variance": 33.199,
+    "residual_standard_deviation": 14.266
+  },
+  "mean_7x7": {
+    "minimum": 0,
+    "maximum": 255,
+    "mean": 79.593,
+    "standard_deviation": 49.229,
+    "laplacian_variance": 12.436,
+    "residual_standard_deviation": 18.146
+  }
+}

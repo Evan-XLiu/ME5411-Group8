@@ -18,14 +18,14 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Local datasets and generated outputs
+# Local datasets and generated model files
 data/raw/*
 data/processed/*
-results/figures/*
+dataset_2026_updated/
+Test_Image_2026.bmp
 results/models/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-!results/figures/.gitkeep
 !results/models/.gitkeep
 
 # LaTeX build files

@@ -1,37 +1,33 @@
 # Source code
 
-The first six tasks form the complete character-recognition pipeline described
-by the ME5411 lectures and the report template:
+The source tree follows the project brief directly:
 
-| Task | Implementation | Main lecture concept |
+| Task | Module | Responsibility |
 | --- | --- | --- |
-| 1 | `task_01/enhance.py` | Piecewise-linear contrast stretch and histogram equalisation |
-| 2 | `task_02/smooth.py` | Mean/Gaussian/median and rotating-mask smoothing |
-| 3 | `task_03/threshold.py` | ROI cropping, Otsu global threshold, local threshold |
-| 4 | `task_04/segment.py` | Sobel outline, connected components, character crops |
-| 5 | `task_05/cnn.py` | Supervised CNN classifier with a deterministic split |
-| 6 | `task_06/classical.py` | HOG + RBF-SVM, with nearest-centroid fallback |
+| 1 | `task_01/enhance.py` | Contrast stretching, histogram equalisation, and mean-centred contrast |
+| 2 | `task_02/smooth.py` | 3x3, 5x5, and 7x7 averaging filters |
+| 3 | `task_03/crop.py` | Crop the HD44780A00 region of interest |
+| 4 | `task_04/binarize.py` | Otsu and adaptive Gaussian binarisation |
+| 5 | `task_05/outline.py` | Noise cleanup, Sobel/morphological outlines, and contours |
+| 6 | `task_06/segment.py` | Connected-component and projection-based character segmentation |
+| 7-1 | `task_07/cnn.py` | CNN character classifier |
+| 7-2 | `task_07/classical.py` | HOG with an RBF-SVM or nearest-centroid fallback |
 
-Reusable implementations are in `common/`. Commands are run from the project
-root with `PYTHONPATH=src`, for example:
+`common/pipeline_io.py` contains the shared Unicode-safe image I/O, JSON, and
+comparison-panel helpers. The top-level `segment.py` is the single entry point
+for Tasks 1-6 and calls these modules in order:
 
-```bash
-python -m task_01.enhance --input data/raw/chip.png \
-  --output results/figures/enhanced.png --metrics results/figures/enhanced.json
-python -m task_02.smooth --input results/figures/enhanced.png \
-  --output results/figures/smoothed.png --method gaussian --size 3
-python -m task_03.threshold --input results/figures/smoothed.png \
-  --output results/figures/binary.png --method otsu \
-  --metadata results/figures/threshold.json
-python -m task_04.segment --input results/figures/binary.png \
-  --output-dir data/processed/characters
-python -m task_05.cnn --data data/processed/characters \
-  --model results/models/character_cnn.pt --metrics results/models/cnn.json
-python -m task_06.classical train --data data/processed/characters \
-  --model results/models/hog_svm.pkl --metrics results/models/classical.json
+```powershell
+python segment.py
+python segment.py --show
 ```
 
-The classifier dataset uses one directory per character label, such as
-`characters/0/*.png` and `characters/A/*.png`. Task 4 emits unlabeled crops;
-they must be assigned to class directories using the project ground truth
-before training. All random splits use seed 42 by default.
+Use `python segment.py --help` to change the input image, output location, ROI,
+adaptive-threshold parameters, or minimum component area. The generated Task
+1-6 figures and metadata are written under `results/figures/`.
+
+Task 7 needs a larger labelled dataset arranged as one directory per character,
+such as `data/processed/characters/0/*.png` and
+`data/processed/characters/A/*.png`. The ten crops from the supplied test image
+are useful for checking segmentation, but they are not enough to train or
+evaluate a classifier reliably.

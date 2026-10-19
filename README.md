@@ -34,19 +34,27 @@ make clean
 
 请勿提交原始数据集、模型权重或包含个人信息的文件。
 
-## Task 1--6 pipeline
+## Task 1--6 image-processing pipeline
 
-The implemented pipeline is in \`src/\`:
+The top-level `segment.py` runs the implemented stages in order:
 
-1. contrast stretching or histogram equalisation;
-2. mean/Gaussian/median/rotating-mask smoothing;
-3. ROI cropping and Otsu or local thresholding;
-4. Sobel outlines and connected-component character crops;
-5. a small PyTorch CNN;
-6. HOG with an RBF-SVM (nearest-centroid fallback).
+1. contrast enhancement;
+2. averaging-filter comparison;
+3. HD44780A00 ROI cropping;
+4. global and adaptive binarisation;
+5. outline extraction and noise cleanup;
+6. individual-character segmentation.
 
-Install the dependencies in \`requirements.txt\`, then run the commands in
-[\`src/README.md\`](src/README.md) with \`PYTHONPATH=src\`. The classifier data
-must be arranged as one directory per character label, for example
-\`data/processed/characters/A/*.png\`; raw course data and generated model files
-remain ignored by Git.
+Install the dependencies in `requirements.txt`, then run:
+
+```powershell
+python segment.py
+```
+
+Add `--show` to display each comparison window. Figures, metrics, and the ten
+character crops are saved under `results/figures/`. Each stage is implemented
+in the matching `src/task_01` through `src/task_06` directory; see
+[`src/README.md`](src/README.md) for the detailed mapping.
+
+Task 7 contains the CNN and non-CNN classifiers. It requires a larger labelled
+character dataset before meaningful training and evaluation can begin.
