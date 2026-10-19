@@ -7,16 +7,16 @@ report, dataset or existing pipeline.
 - `CNN_train.py`: working entry point backed by the shared training pipeline.
 - `CNN_train_original.py`: original contributor script, preserved for reference.
   It loads data from a different directory and does not call training/evaluation.
-- Root `segment.py`: original unfinished OpenCV prototype, preserved unchanged.
-  Use `src/task_01` through `src/task_04` for the working preprocessing pipeline.
+- Root `segment.py`: integrated PR Task 1–6 pipeline. The original unfinished
+  OpenCV prototype remains in Git history.
 
 Run from the repository root after installing `requirements.txt`:
 
 ```bash
-PYTHONPATH=src python -m task_05.cnn --data dataset_2026 \
+PYTHONPATH=src python -m task_07.cnn --data dataset_2026 \
   --architecture baseline --model results/models/baseline.pt \
   --metrics results/models/baseline.json
-PYTHONPATH=src python -m task_05.cnn --data dataset_2026 \
+PYTHONPATH=src python -m task_07.cnn --data dataset_2026 \
   --architecture yjn --model results/models/yjn.pt \
   --metrics results/models/yjn.json
 PYTHONPATH=src python -m task_06.classical train --data dataset_2026 \
@@ -51,3 +51,7 @@ Recorded metrics: `comparison_smoke.json`. These are integration checks, not
 a tuned or repeated benchmark. Baseline converged faster in this short run;
 YJN uses about 73% fewer parameters. Keep baseline as the default and retain
 YJN for controlled longer experiments. Dataset loading is excluded from timing.
+
+The root segment.py now runs the integrated PR pipeline; the old prototype is
+retained in Git history. Full validation-selected experiments are recorded in
+results/experiments/task7_results.json; the 3-epoch check below is historical.

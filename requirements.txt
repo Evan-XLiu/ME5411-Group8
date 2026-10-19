@@ -9,3 +9,6 @@ torch>=2.0
 # Legacy YJN scripts (CNN_train_original.py and segment.py)
 torchvision>=0.15
 opencv-python>=4.7
+
+# Reproducibility checks
+pytest>=7

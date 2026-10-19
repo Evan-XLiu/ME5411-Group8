@@ -21,7 +21,6 @@ venv/
 # Local datasets and generated outputs
 data/raw/*
 data/processed/*
-results/figures/*
 results/models/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
@@ -46,3 +45,10 @@ report/main.pdf
 
 # Course material is local reference only and is not part of the submission
 Lecture Notes/
+
+# Reproducible submission package and temporary environment
+submission/
+*.zip
+
+# XeLaTeX intermediates
+*.xdv

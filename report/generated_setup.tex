@@ -1,0 +1,33 @@
+The recorded environment is \texttt{macOS-26.5.2-arm64-arm-64bit-Mach-O}. All experiments use CPU execution
+with one PyTorch thread. Seed 42 fixes the stratified 75/25 split: 5334
+training and 1778 test samples. Twenty percent of the training portion
+is held out for validation during configuration selection. Four configurations
+per CNN compare direct resizing versus centered square padding, and learning
+rates 0.001 versus 0.0003. HOG-SVM compares the same preprocessing options
+and $C=1$ versus $C=10$. Each CNN is trained for 20 epochs with batch size 32.
+The highest validation accuracy selects the configuration (first trial breaks
+ties). The selected configuration is retrained on the full training portion.
+
+Each of the seven classes contains 1016 samples. Sample paths, hashes and
+split indices are saved in \path{results/experiments/split_manifest.json}.
+Chip images and crops are never included in training. Timing is recorded
+with \texttt{perf\_counter}; CNN preparation and SVM HOG extraction are excluded
+from training time. The original short smoke experiment previously inspected
+the same test partition, so this is a fixed protocol evaluation, not a new
+untouched blind test. Only one seed is measured; uncertainty across seeds
+is not established. The random image split is not grouped by font or origin.
+\subsection{Configuration selection}\begin{center}\begin{tabular}{llllr}\toprule
+Model & Input & LR / C & Epochs & Validation accuracy (\%) \\ \midrule
+baseline & resize & 0.001 & 20 & 99.72 \\
+baseline & resize & 0.0003 & 20 & 99.44 \\
+baseline & pad & 0.001 & 20 & 99.72 \\
+baseline & pad & 0.0003 & 20 & 99.44 \\
+yjn & resize & 0.001 & 20 & 96.99 \\
+yjn & resize & 0.0003 & 20 & 96.90 \\
+yjn & pad & 0.001 & 20 & 96.99 \\
+yjn & pad & 0.0003 & 20 & 96.90 \\
+hog-svm & resize & 1.0 & n/a & 97.74 \\
+hog-svm & resize & 10.0 & n/a & 98.03 \\
+hog-svm & pad & 1.0 & n/a & 97.74 \\
+hog-svm & pad & 10.0 & n/a & 98.03 \\
+\bottomrule\end{tabular}\end{center}

@@ -1,0 +1,26 @@
+{
+  "original": {
+    "minimum": 41,
+    "maximum": 246,
+    "mean": 89.588,
+    "standard_deviation": 23.041
+  },
+  "contrast_stretch_1_99_percentile": {
+    "minimum": 0,
+    "maximum": 255,
+    "mean": 79.592,
+    "standard_deviation": 55.169
+  },
+  "histogram_equalization": {
+    "minimum": 0,
+    "maximum": 255,
+    "mean": 132.753,
+    "standard_deviation": 71.395
+  },
+  "mean_centered_alpha_1_5": {
+    "minimum": 16,
+    "maximum": 255,
+    "mean": 89.071,
+    "standard_deviation": 34.514
+  }
+}

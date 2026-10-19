@@ -1,37 +1,50 @@
-\documentclass[conference]{IEEEtran}
+\documentclass[11pt,a4paper]{article}
+\usepackage{fontspec}
+\setmainfont{Arial}
+\usepackage[margin=25mm]{geometry}
+\usepackage{setspace}
+\singlespacing
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\newcommand{\IEEEkeywords}[1]{#1}
 
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{cite}
 \usepackage{graphicx}
-\usepackage[hidelinks]{hyperref}
+\usepackage[hidelinks,hypertexnames=false]{hyperref}
 
 \title{Microchip Character Recognition Using Image Processing and Machine Learning}
 
-\author{
-  \IEEEauthorblockN{Group 8}
-  \IEEEauthorblockA{
-    ME5411 Robot Vision and AI\\
-    National University of Singapore\\
-    Singapore
-  }
-}
-
 \begin{document}
 
-\maketitle
+\begin{titlepage}
+\centering
+{\LARGE Microchip Character Recognition Using Image Processing and Machine Learning\par}
+\vspace{15mm}
+{\Large ME5411 Robot Vision and AI --- Group 8\par}
+\vspace{10mm}
+\begin{tabular}{ll}
+\textbf{Name} & \textbf{Student number} \\
+\input{members}
+\end{tabular}
+\vfill
+National University of Singapore\
+19 October 2026\
+Working report: student numbers and group-authored analysis pending.
+\end{titlepage}
 
 \begin{abstract}
 This report presents an image-processing and machine-learning pipeline for
-recognizing characters printed on a microchip. The final report will describe
+recognizing characters printed on a microchip. The report describes
 the preprocessing, segmentation, feature extraction, classification, and
 evaluation procedures developed by Group 8.
 \end{abstract}
 
-\begin{IEEEkeywords}
+\paragraph{Keywords}
 robot vision, image processing, character recognition, convolutional neural
 network, classification
-\end{IEEEkeywords}
+
 
 \section{Introduction}
 Character recognition in low-contrast industrial imagery requires careful
@@ -40,452 +53,54 @@ methods provide interpretable tools for enhancing and isolating characters
 \cite{gonzalez2018digital}, while convolutional neural networks can learn
 features directly from image data \cite{lecun1998gradient}.
 
-The report is organised into seven tasks. Tasks 1--6 cover image
-enhancement, smoothing, ROI extraction, binarization, outline extraction,
-and character segmentation. Task 7 compares a compact CNN with a
-conventional HOG-based classifier. The repository implements these stages
-in six Python modules: \texttt{task\_03} combines Tasks 3 and 4,
-\texttt{task\_04} combines Tasks 5 and 6, and \texttt{task\_05}
-and \texttt{task\_06} implement Subtasks 7-1 and 7-2, respectively.
-Numerical results must be generated using the supplied commands and the
-course data.
+The report follows the seven course tasks. Modules \texttt{task\_01}
+through \texttt{task\_06} implement image processing;
+\texttt{task\_07} contains the CNN and non-CNN classifiers.
 
 \section{Problem Formulation}
-Describe the input image, recognition targets, operating assumptions, and
-evaluation criteria. State the dataset split and measures used for comparison.
+The input is a 990-by-367 grayscale microchip image. The target line is
+HD44780A00. Seven character classes (0, 4, 7, 8, A, D, H) are learned
+from the separate course classification dataset. A stratified 75/25
+training/test split is fixed with seed 42. Configuration selection uses
+only a validation subset of the training data. Chip crops are used for
+inference only, never training. The official input filename differs between
+the assignment PDF and the local dataset; the group must confirm provenance.
 
 \section{Methodology}
 
-\subsection{Image Enhancement and Smoothing}
-
-\subsubsection{Task 1: Image Enhancement}
-
-Task 1 aims to improve the legibility of the characters printed on the
-microchip. In the input image, the characters have intensities similar to
-those of the background, while the prominent background texture further
-reduces their visibility. The image is first converted into an 8-bit
-grayscale representation. Contrast stretching and histogram equalization
-are then applied separately to investigate their effects on image contrast
-and character details.
-
-\paragraph{Contrast Stretching}
-
-Contrast stretching is a piecewise-linear intensity transformation that
-maps the selected input intensity interval $[L,H]$ to the output range
-$[0,255]$. Input intensities below $L$ are set to 0, whereas intensities
-above $H$ are set to 255. For $H>L$, the transformation is defined as
-
-\begin{equation}
-g(x,y)=
-\begin{cases}
-0, & f(x,y)\leq L,\\[3pt]
-\displaystyle 255\frac{f(x,y)-L}{H-L},
-& L<f(x,y)<H,\\[6pt]
-255, & f(x,y)\geq H.
-\end{cases}
-\label{eq:stretch}
-\end{equation}
-
-Here, $f(x,y)$ and $g(x,y)$ denote the input and output intensities at
-pixel location $(x,y)$, respectively. The parameters $L$ and $H$ represent
-the lower and upper limits of the selected input intensity interval.
-Unless specified manually, these limits are determined from the minimum
-and maximum intensities of the input image:
-
-\begin{equation}
-L=\min_{x,y}f(x,y),
-\qquad
-H=\max_{x,y}f(x,y).
-\label{eq:stretch_limits}
-\end{equation}
-
-The mapped values are rounded to the nearest integer, clipped to the valid
-range from 0 to 255, and stored as an 8-bit grayscale image. If $H\leq L$,
-the implementation returns an all-zero image to avoid an invalid division.
-
-Contrast stretching expands the intensity differences within the selected
-interval. However, because the transformation does not distinguish between
-character pixels and background pixels, it may also amplify background
-texture. If the input image already spans the full intensity range from
-0 to 255, applying the default limits produces little or no change.
-
-\paragraph{Histogram Equalization}
-
-Histogram equalization constructs an intensity mapping from the grayscale
-distribution of the entire image. It uses the cumulative distribution
-function to redistribute the intensity levels, allowing densely populated
-input intensity intervals to occupy a wider output range.
-
-Let $N$ denote the total number of pixels in the image and $n_k$ denote
-the number of pixels with intensity $k$. The normalized grayscale
-histogram is defined as
-
-\begin{equation}
-p(k)=\frac{n_k}{N},
-\qquad k=0,1,\ldots,255.
-\label{eq:normalized_histogram}
-\end{equation}
-
-The corresponding cumulative distribution function is
-
-\begin{equation}
-C(k)=\sum_{j=0}^{k}p(j),
-\label{eq:histogram_cdf}
-\end{equation}
-where $C(k)$ represents the proportion of pixels with intensities less
-than or equal to $k$.
-
-The implementation subtracts the minimum nonzero cumulative value so
-that the lowest intensity present in the image is mapped to 0. Let
-$k_{\min}$ denote the lowest occupied intensity level. The corresponding
-minimum cumulative value is
-
-\begin{equation}
-C_{\min}=C(k_{\min}).
-\label{eq:histogram_cdf_min}
-\end{equation}
-
-For an image containing at least two distinct intensity levels, the
-equalization mapping is defined as
-
-\begin{equation}
-\begin{split}
-T(k)=\operatorname{clip}\Bigg(
-\operatorname{round}\Bigg[
-255\frac{C(k)-C_{\min}}{1-C_{\min}}
-\Bigg],\,0,\,255\Bigg).
-\end{split}
-\label{eq:histogram_mapping}
-\end{equation}
-
-The mapping is then applied to each input pixel:
-
-\begin{equation}
-g(x,y)=T\bigl(f(x,y)\bigr).
-\label{eq:histogram_output}
-\end{equation}
-
-In \eqref{eq:histogram_mapping}, $\operatorname{round}$ rounds the
-calculated value to the nearest integer, whereas $\operatorname{clip}$
-restricts the result to the valid 8-bit range from 0 to 255. The
-implementation uses this mapping to construct a lookup table containing
-256 entries and applies the table to all pixels in the input image. If
-the input image contains only one intensity level, it is returned
-unchanged.
-
-Figure~\ref{fig:histogram_equalization} presents the grayscale
-histograms before and after histogram equalization. Both histograms
-use intensity level on the horizontal axis and pixel count on the
-vertical axis. Identical axis limits are used to facilitate comparison.
-
-\begin{figure}[!t]
-    \centering
-
-    \includegraphics[width=\columnwidth]
-    {figures/histogram_original.png}
-
-    \textnormal{(a) Original grayscale histogram}
-
-    \vspace{1.5mm}
-
-    \includegraphics[width=\columnwidth]
-    {figures/histogram_equalized.png}
-
-    \textnormal{(b) Histogram after equalization}
-
-    \caption{Grayscale histograms before and after histogram
-    equalization: (a) original grayscale histogram;
-    (b) histogram after equalization.}
-    \label{fig:histogram_equalization}
-\end{figure}
-
-Because digital images contain discrete intensity levels, the equalized
-histogram is not necessarily perfectly uniform. Furthermore, histogram
-equalization does not distinguish character pixels from background
-pixels and may therefore emphasize background texture and noise while
-increasing character contrast. The enhanced images and the practical
-effects of both methods are evaluated in the Results and Discussion
-sections.
-
-\subsubsection{Task 2: Image Smoothing}
-
-Task 2 applies spatial smoothing to the microchip character image. A
-$5\times5$ averaging filter is first implemented as required, and
-averaging filters of different sizes are subsequently compared to examine
-the trade-off between suppressing background intensity variations and
-preserving character details.
-
-For an $m\times m$ window, where $m$ is a positive odd integer and
-$r=(m-1)/2$, the averaging filter is defined as
-
-\begin{equation}
-g(x,y)=
-\frac{1}{m^2}
-\sum_{i=-r}^{r}
-\sum_{j=-r}^{r}
-f(x+i,y+j),
-\label{eq:mean_filter}
-\end{equation}
-where $f(x,y)$ and $g(x,y)$ denote the input and filtered intensities,
-respectively. For the required $5\times5$ filter, the kernel is
-
-\begin{equation}
-K=
-\frac{1}{25}
-\begin{bmatrix}
-1&1&1&1&1\\
-1&1&1&1&1\\
-1&1&1&1&1\\
-1&1&1&1&1\\
-1&1&1&1&1
-\end{bmatrix}.
-\label{eq:mean_kernel_5}
-\end{equation}
-
-All 25 pixels in the neighborhood therefore have an equal weight of
-$1/25$. Reflection padding is used at the image boundaries, and the
-calculated values are rounded, restricted to the range 0--255, and stored
-as an 8-bit grayscale image.
-
-Larger filtering windows generally produce stronger smoothing, but may
-also blur character edges and fine image details. Therefore, averaging
-filters of different window sizes are applied independently to the same
-input image for comparison.
-
-
-\noindent\hspace*{\parindent}\textit{Other Smoothing Methods:}\
-In addition, Gaussian, median, and rotating-mask filters are implemented
-as supplementary smoothing methods. Their effects are compared with
-those of the averaging filter in the Results section.
-
-\subsection{Region of Interest Extraction and Binarization}
-
-\subsubsection{Task 3: Region of Interest Extraction}
-
-Task 3 extracts the region of interest (ROI) containing the target
-character sequence ``HD44780A00'' from the complete microchip image.
-This operation reduces the influence of background texture and other
-irrelevant regions on the subsequent binarization and character
-segmentation processes. A rectangular region is used to crop the target
-characters. The rectangle is defined by its top-left coordinate
-$(x_0,y_0)$, width $w$, and height $h$, which are supplied at runtime
-in the form $(x_0,y_0,w,h)$.
-
-Let the input image be denoted by $I(x,y)$ and the cropped image by
-$I_{\mathrm{ROI}}(u,v)$. The ROI extraction process is expressed as
-
-\begin{equation}
-I_{\mathrm{ROI}}(u,v)
-=
-I(x_0+u,\;y_0+v),
-\label{eq:roi_extraction}
-\end{equation}
-where
-\begin{equation}
-0 \leq u < w,
-\qquad
-0 \leq v < h.
-\label{eq:roi_coordinates}
-\end{equation}
-
-In the above expressions, $u$ and $v$ denote the horizontal and
-vertical coordinates in the cropped image, respectively. The dimensions
-of the cropped image are therefore $w\times h$.
-
-The four parameters ($x_0$, $y_0$, $w$, $h$) are supplied at runtime rather than being fixed
-within the cropping algorithm. Their values depend on the position of
-the target characters and the geometry of the input image. The
-specific values used in the experiment are reported in the
-Experimental Setup section. If no ROI parameters are provided, the
-complete input image is used for subsequent processing.
-
-\subsubsection{Task 4: Image Binarization}
-
-Task 4 converts the grayscale region of interest extracted in Task 3
-into a binary image, in which the characters and background are
-represented as the foreground and background, respectively. Otsu's global thresholding and local mean thresholding are compared.
-The current thresholding module also contrast-stretches the cropped ROI
-before applying either thresholding method.
-
-\paragraph{Otsu's Global Thresholding}
-
-Otsu's method examines all possible grayscale thresholds and selects
-the threshold that maximizes the between-class variance of the
-foreground and background. For a candidate threshold $t$, the
-between-class variance is defined as
-
-\begin{equation}
-\sigma_B^2(t)
-=
-\omega_0(t)\omega_1(t)
-\left[\mu_0(t)-\mu_1(t)\right]^2,
-\label{eq:between_class_variance}
-\end{equation}
-where $\omega_0(t)$ and $\omega_1(t)$ denote the proportions of pixels
-belonging to the two classes, and $\mu_0(t)$ and $\mu_1(t)$ denote
-their corresponding mean grayscale values. The optimal threshold is
-given by
-
-\begin{equation}
-t^*
-=
-\operatorname*{arg\,max}_{t}
-\sigma_B^2(t).
-\label{eq:otsu_threshold}
-\end{equation}
-
-For bright characters on a dark background, the binary result obtained
-using Otsu's method is defined as
-
-\begin{equation}
-B(u,v)
-=
-\begin{cases}
-1, & I_{\mathrm{ROI}}(u,v)>t^*,\\[4pt]
-0, & I_{\mathrm{ROI}}(u,v)\leq t^*.
-\end{cases}
-\label{eq:otsu_binarization}
-\end{equation}
-Here, $I_{\mathrm{ROI}}(u,v)$ denotes the grayscale region extracted in
-Task 3, and $B(u,v)$ denotes the corresponding binary image.
-
-\paragraph{Local Mean Thresholding}
-
-Local mean thresholding determines the threshold of each pixel from
-the mean grayscale value within its local neighborhood. Let
-$\mathcal{N}_{u,v}$ denote a square neighborhood centred at $(u,v)$.
-The local mean is defined as
-
-\begin{equation}
-\mu_{\mathcal{N}}(u,v)
-=
-\frac{1}{|\mathcal{N}_{u,v}|}
-\sum_{(i,j)\in\mathcal{N}_{u,v}}
-I_{\mathrm{ROI}}(i,j).
-\label{eq:local_mean}
-\end{equation}
-The corresponding local threshold is
-
-\begin{equation}
-t_{\mathrm{local}}(u,v)
-=
-\mu_{\mathcal{N}}(u,v)-\delta,
-\label{eq:local_threshold}
-\end{equation}
-where $\delta$ is a configurable offset. For bright characters on a
-dark background, the local binary result is given by
-
-\begin{equation}
-B(u,v)
-=
-\begin{cases}
-1, & I_{\mathrm{ROI}}(u,v)>t_{\mathrm{local}}(u,v),\\[4pt]
-0, & I_{\mathrm{ROI}}(u,v)\leq t_{\mathrm{local}}(u,v).
-\end{cases}
-\label{eq:local_binarization}
-\end{equation}
-
-Because the threshold varies spatially, local mean thresholding can
-reduce the influence of non-uniform illumination across the image.
-The implementation also supports inversion of the foreground
-direction so that both bright characters on a dark background and
-dark characters on a bright background can be processed.
-
-Internally, foreground and background pixels are represented by 1 and
-0, respectively. When a binary result is saved as a PNG image,
-foreground pixels are converted to 255 so that they appear white in
-the output image. The thresholding method and its parameter settings
-used in the final processing pipeline are specified in the
-Experimental Setup section.
-
-\subsection{Outline Extraction and Character Segmentation}
-
-\subsubsection{Task 5: Character Outline Extraction}
-
-Task 5 applies the Sobel operator to extract the character outlines.
-The horizontal and vertical gradients of the binary image obtained in
-Task 4 are computed using the following convolution kernels:
-
-\begin{equation}
-S_x=
-\begin{bmatrix}
--1 & 0 & 1\\
--2 & 0 & 2\\
--1 & 0 & 1
-\end{bmatrix},
-\qquad
-S_y=
-\begin{bmatrix}
--1 & -2 & -1\\
-0 & 0 & 0\\
-1 & 2 & 1
-\end{bmatrix}.
-\label{eq:sobel_kernels}
-\end{equation}
-
-Let $B(u,v)$ denote the binary image obtained in Task 4. The horizontal
-and vertical gradient responses are given by
-
-\begin{equation}
-G_x=(255B)*S_x,
-\qquad
-G_y=(255B)*S_y,
-\label{eq:sobel_responses}
-\end{equation}
-where $*$ denotes two-dimensional convolution. The factor 255 matches
-the saved binary PNG intensities used by the implementation. The gradient magnitude
-at each pixel is then calculated as
-
-\begin{equation}
-G(u,v)
-=
-\sqrt{G_x^2(u,v)+G_y^2(u,v)}.
-\label{eq:gradient_magnitude}
-\end{equation}
-
-The gradient magnitude is compared with a configurable edge threshold
-$\tau$ to obtain a binary outline image:
-
-\begin{equation}
-E(u,v)
-=
-\begin{cases}
-1, & G(u,v)\geq\tau,\\[4pt]
-0, & G(u,v)<\tau.
-\end{cases}
-\label{eq:outline_threshold}
-\end{equation}
-
-Pixels with large gradient magnitudes generally correspond to locations
-with strong intensity changes between the characters and background.
-The resulting binary outline image is therefore used to examine the
-completeness of the character boundaries and to provide a diagnostic
-output for the subsequent segmentation process.
-
-\subsubsection{Task 6: Character Segmentation and Labelling}
-
-Task 6 applies connected-component analysis to the binary foreground
-image obtained in Task 4. The implementation supports both
-4-connectivity and 8-connectivity and uses a breadth-first flood-fill
-procedure to assign the same label to mutually connected foreground
-pixels.
-
-Connected components with areas below a configurable threshold are
-treated as noise and removed. For each retained component, the program
-calculates its area, bounding box, centroid, and perimeter estimate.
-These measurements are stored in a JSON file. The retained components
-are then sorted from left to right according to the horizontal
-positions of their bounding boxes. Each component is cropped with a
-configurable amount of padding and exported as an individual character
-image.
-
-Connected-component analysis treats each independent foreground region
-as a candidate character. Consequently, isolated noise may be
-incorrectly identified as a character, while touching characters may
-be labelled as a single component. The generated label image,
-character crops, and component measurements are used to diagnose these
-segmentation errors, which are examined further in the Results and
-Discussion sections.
+\subsection{Tasks 1--6: Integrated Image Processing}
+Task 1 uses grayscale conversion, 1st--99th percentile contrast stretching,
+CDF-based histogram equalization and mean-centered contrast scaling.
+Task 2 compares normalized averaging filters of sizes 3, 5 and 7; the
+5-by-5 mean output is passed downstream. Task 3 crops
+$(x,y,w,h)=(45,180,930,180)$. Task 4 compares global Otsu and adaptive
+Gaussian thresholding (block size 31, constant $C=-5$). The Otsu mask
+is selected for subsequent processing.
+
+Task 5 removes connected components with area below 200 pixels. Sobel
+gradient magnitude on the smoothed ROI is normalized and thresholded
+with Otsu, then masked to a dilated foreground neighborhood. An additional
+binary outline is obtained by subtracting a 3-by-3 erosion from the cleaned
+mask. Task 6 splits wide connected components at vertical-projection
+valleys, using median component width to estimate the number of characters.
+Ten boxes are expected for this specific target line. The known target
+text supplies manual reference labels only; it is not a recognition result.
+
+\begin{center}
+\begin{tikzpicture}[node distance=5mm, every node/.style={draw,align=center,font=\small}, >=Stealth]
+
+\node (a) {Original image};
+
+\node[below=of a] (b) {Enhancement comparison $\rightarrow$ 5-by-5 mean};
+
+\node[below=of b] (c) {ROI $\rightarrow$ Otsu mask $\rightarrow$ component cleanup};
+
+\node[below=of c] (d) {Outlines and projection-based character segmentation};
+
+\node[below=of d] (e) {CNN / HOG-SVM inference on ten crops};
+\draw[->] (a)--(b);\draw[->] (b)--(c);\draw[->] (c)--(d);\draw[->] (d)--(e);
+\end{tikzpicture}
+\end{center}
 
 \subsection{Classifier}
 
@@ -590,19 +205,19 @@ Discussion sections.
 
 paragraph{Alternative CNN from the YJN branch}
 The integrated code also provides a second architecture selected with
-	exttt{--architecture yjn}. It uses three convolutional blocks with
+\texttt{--architecture yjn}. It uses three convolutional blocks with
 16, 32, and 64 channels, each with batch normalization, ReLU, and
 max pooling. Global average pooling produces 64 features, followed by
 dropout with probability 0.3 and a direct classification layer.
 Both architectures use the same input resizing and stratified 75/25
 training/test split through the shared training interface. The
-	exttt{baseline} option retains the architecture described above.
+\texttt{baseline} option retains the architecture described above.
 Measured comparisons and preprocessing and hyperparameter studies
 remain to be completed for Subtask 7-3.
 
 \subsubsection{Subtask 7-2: Non-CNN Classifier}
 Subtask 7-2 uses a 32-by-32 unsigned-gradient HOG descriptor (4-pixel cells and nine
-orientation bins). An RBF SVM with $C=10$ is used when scikit-learn is present;
+orientation bins). An RBF SVM with $C$ selected on validation data is used when scikit-learn is present;
 the same interface falls back to a nearest-centroid classifier for a minimal
 installation. The feature extractor, split seed, classifier type, and accuracy
 are serialized so that the baseline can be compared with the CNN without
@@ -610,166 +225,50 @@ changing the data protocol.
 
 \section{Experimental Setup}
 
-\subsection{Software and Hardware Environment}
-
-All experiments were conducted on a computer running Windows 11 and
-equipped with a 12th Gen Intel Core i7-12700H processor, 16 GB of
-memory, and an NVIDIA GeForce RTX 3050 Ti Laptop GPU. The software
-environment consisted of Python 3.11.16, NumPy 2.4.6, Pillow 12.3.0,
-and PyTorch 2.14.0.
-
-The installed PyTorch package was a CPU-only build, and the training
-program did not transfer the model or input tensors to a CUDA device.
-Therefore, all CNN training and evaluation experiments were performed
-on the CPU. The training times reported in the Results section
-correspond to this CPU execution environment.
-
-\subsection{Image-Processing Configuration}
-
-\subsubsection{Task 1: Image Enhancement}
-
-The official input image, \texttt{Test\_Image\_2026.bmp}, has a
-resolution of $990\times367$ pixels. It was first converted from RGB
-to an 8-bit grayscale image. Contrast stretching and histogram
-equalization were applied independently, and the outputs of both
-methods were retained for comparison. The contrast-stretched image
-was used in the subsequent processing pipeline.
-
-\subsubsection{Task 2: Image Smoothing}
-
-Averaging filters with window sizes of $3\times3$, $5\times5$, and
-$7\times7$ were applied to the contrast-stretched image obtained in
-Task 1. These window sizes were selected to examine the trade-off
-between noise suppression and the preservation of character details.
-The result obtained using the $5\times5$ averaging filter was used in
-the subsequent processing pipeline.
-
-\subsubsection{Task 3: Region of Interest Extraction}
-
-The target character region was determined by visually inspecting and
-iteratively adjusting the cropped result. The final ROI parameters
-were
-
-\begin{equation}
-(x_0,y_0,w,h)=(30,185,945,170).
-\label{eq:experimental_roi}
-\end{equation}
-
-Therefore, the top-left coordinate of the selected region was
-$(30,185)$, and the cropped image had a resolution of
-$945\times170$ pixels.
-
-\subsubsection{Task 4: Image Binarization}
-
-Otsu's global thresholding and local mean thresholding were evaluated
-using the same ROI. The final processing pipeline used local mean
-thresholding with a $51\times51$ neighborhood and an offset of
-
-\begin{equation}
-\delta=-20.
-\label{eq:experimental_local_offset}
-\end{equation}
-
-According to the threshold definition
-
-\begin{equation}
-t_{\mathrm{local}}(u,v)
-=
-\mu_{\mathcal{N}}(u,v)-\delta,
-\end{equation}
-
-this setting produced a local threshold equal to the neighborhood mean
-plus 20. The foreground direction was configured for bright characters
-on a dark background.
-
-\subsubsection{Task 5: Character Outline Extraction}
-
-Character outlines were extracted using the Sobel operator. The
-horizontal and vertical gradient responses were combined to calculate
-the gradient magnitude. A gradient-magnitude threshold of 80 was used
-to generate the binary outline image.
-
-\subsubsection{Task 6: Character Segmentation and Labelling}
-
-Connected-component labelling was performed using 8-connectivity.
-Components containing fewer than 200 foreground pixels were treated
-as noise and removed. A padding width of two pixels was added around
-the bounding box of each retained component before the character was
-cropped. This configuration produced ten candidate character regions
-corresponding to the target character sequence.
+\input{generated_setup}
 
 \section{Results}
-Present quantitative and qualitative results. Include intermediate
-image-processing outputs, classification metrics, confusion matrices, runtime
-measurements, and sensitivity studies.
-
-\begin{table}[t]
-  \caption{Placeholder Classification Results}
-  \label{tab:results}
-  \centering
-  \begin{tabular}{lcc}
-    \toprule
-    Method & Accuracy (\%) & Runtime (ms) \\
-    \midrule
-    CNN & -- & -- \\
-    Non-CNN & -- & -- \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+\input{generated_results}
 
 \section{Discussion}
-Compare the effectiveness, efficiency, robustness, and failure modes of the two
-classification approaches. Explain observed differences using evidence from the
-experiments rather than accuracy alone.
+Group-authored analysis pending: explain the measured CNN/non-CNN differences,
+preprocessing and hyperparameter sensitivity, robustness and failure cases.
+The automated tables are evidence for review, not an authored explanation.
 
 \section{Conclusion}
-Summarize the principal findings, lessons learned, limitations, and possible
-improvements.
+Group-authored conclusion pending: state the findings supported by the
+measurements, lessons learned and limitations.
+Identify improvements justified by the group.
 
 \section*{Code Execution Guide}
-Install the dependencies listed in \texttt{requirements.txt}, then run the
-following from the repository root with \texttt{PYTHONPATH=src}:
-
-\begingroup
-\scriptsize
+Install Python 3.13 and the dependencies in \texttt{requirements.txt}.
+Place the official classification folders and chip image under
+\texttt{dataset\_2026/}. From the repository root run:
 \begin{verbatim}
-python -m task_01.enhance \
-  --input dataset_2026/Test_Image_2026.bmp \
-  --output results/figures/enhanced.png
-python -m task_02.smooth \
-  --input results/figures/enhanced.png \
-  --output results/figures/smoothed.png \
-  --method mean --size 5
-python -m task_03.threshold \
-  --input results/figures/smoothed.png \
-  --output results/figures/binary.png \
-  --roi 30 185 945 170 --method adaptive \
-  --window 51 --offset -20 --foreground bright
-python -m task_04.segment \
-  --input results/figures/binary.png \
-  --output-dir data/processed/candidates \
-  --connectivity 8 --min-area 200 --padding 2 \
-  --edge-threshold 80
-python -m task_05.cnn --data data/processed/characters \
-  --model results/models/character_cnn.pt
-python -m task_06.classical train \
-  --data data/processed/characters \
-  --model results/models/hog_svm.pkl
+python segment.py
+python scripts/run_experiments.py --epochs 20
+python scripts/predict_characters.py \
+  --model results/models/baseline_final.pt
+python scripts/predict_characters.py \
+  --model results/models/hog_svm_final.pkl
+python -m pytest -q
+make pdf
 \end{verbatim}
-\endgroup
-
-The classifier data set has one directory per character (for example
-\texttt{characters/A/*.png}). Task 6 crops from \texttt{data/processed/candidates/} are assigned
-to these class directories
-using the available ground truth before training. Every command accepts a
-\texttt{--help} page with parameter defaults and writes generated artifacts only
-under \texttt{results/} or \texttt{data/processed/}.
-
-\section*{Acknowledgment}
-List external libraries, toolboxes, third-party code, and other assistance that
-must be acknowledged according to the course requirements.
-
+The chip crops in \path{results/figures/characters/} are inference
+inputs only. They must not be inserted into the classifier training dataset.
+See the repository README for environment setup, input provenance,
+validation protocol and timing boundaries. Model checkpoints are generated
+locally by the experiment command.
+\section*{Acknowledgment and Provenance}
+The code uses Python, NumPy, Pillow, OpenCV, PyTorch and scikit-learn.
+The integrated image-processing implementation is from PR 1 by Jiayi Guo;
+the alternative CNN is from the YJN branch; the expanded report draft
+was contributed by Hongchao Wang. The group must verify individual
+contributions, external code citations and actual AI assistance before
+submission. The course permits LLM language editing, while ideas, analysis
+and reasoning must originate from group members. Automated numerical
+outputs in this working report are not a substitute for group-authored
+interpretation.
 \bibliographystyle{IEEEtran}
 \bibliography{references}
-
 \end{document}

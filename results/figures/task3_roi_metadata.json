@@ -1,0 +1,17 @@
+{
+  "roi_xywh": [
+    45,
+    180,
+    930,
+    180
+  ],
+  "source_image_size_wh": [
+    990,
+    367
+  ],
+  "cropped_image_size_wh": [
+    930,
+    180
+  ],
+  "target_text": "HD44780A00"
+}

@@ -1,0 +1,16 @@
+{
+  "minimum_component_area": 200,
+  "components_before_cleanup": 81,
+  "components_retained": 7,
+  "retained_component_areas": [
+    4416,
+    9647,
+    3187,
+    9298,
+    10225,
+    3860,
+    4868
+  ],
+  "sobel_threshold": 57,
+  "contours_drawn_including_inner_boundaries": 16
+}

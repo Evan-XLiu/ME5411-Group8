@@ -1,0 +1,11 @@
+{
+  "otsu": {
+    "threshold": 118,
+    "foreground_fraction": 0.281344
+  },
+  "adaptive_gaussian": {
+    "block_size": 31,
+    "c": -5.0,
+    "foreground_fraction": 0.361977
+  }
+}
