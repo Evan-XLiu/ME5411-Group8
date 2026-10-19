@@ -34,6 +34,7 @@ python -m pip install pytest
 python segment.py                 # 加 --show 显示原图和各阶段
 python scripts/run_experiments.py --epochs 20
 python scripts/build_report_results.py
+python scripts/enrich_report.py
 python scripts/predict_characters.py --model results/models/baseline_final.pt
 python scripts/predict_characters.py --model results/models/yjn_final.pt
 python scripts/predict_characters.py --model results/models/hog_svm_final.pkl

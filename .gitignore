@@ -41,7 +41,6 @@ results/models/*
 *.run.xml
 *.synctex.gz
 *.toc
-report/main.pdf
 
 # Course material is local reference only and is not part of the submission
 Lecture Notes/

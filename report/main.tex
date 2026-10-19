@@ -4,7 +4,10 @@
 \usepackage[margin=25mm]{geometry}
 \usepackage{setspace}
 \singlespacing
+\setlength{\emergencystretch}{1em}
 \usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 \usetikzlibrary{positioning,arrows.meta}
 \newcommand{\IEEEkeywords}[1]{#1}
 
@@ -203,7 +206,7 @@ described in the Experimental Setup section. Classification accuracy,
 training time, and error analysis are presented in the Results and
 Discussion sections.
 
-paragraph{Alternative CNN from the YJN branch}
+\paragraph{Alternative CNN from the YJN branch}
 The integrated code also provides a second architecture selected with
 \texttt{--architecture yjn}. It uses three convolutional blocks with
 16, 32, and 64 channels, each with batch normalization, ReLU, and
@@ -212,8 +215,8 @@ dropout with probability 0.3 and a direct classification layer.
 Both architectures use the same input resizing and stratified 75/25
 training/test split through the shared training interface. The
 \texttt{baseline} option retains the architecture described above.
-Measured comparisons and preprocessing and hyperparameter studies
-remain to be completed for Subtask 7-3.
+Measured comparisons and configuration-selection results are reported below.
+Interpretation and recommendations remain subject to group review.
 
 \subsubsection{Subtask 7-2: Non-CNN Classifier}
 Subtask 7-2 uses a 32-by-32 unsigned-gradient HOG descriptor (4-pixel cells and nine
@@ -229,6 +232,8 @@ changing the data protocol.
 
 \section{Results}
 \input{generated_results}
+\clearpage
+\input{generated_audit}
 
 \section{Discussion}
 Group-authored analysis pending: explain the measured CNN/non-CNN differences,
@@ -251,6 +256,8 @@ python scripts/predict_characters.py \
   --model results/models/baseline_final.pt
 python scripts/predict_characters.py \
   --model results/models/hog_svm_final.pkl
+python scripts/build_report_results.py
+python scripts/enrich_report.py
 python -m pytest -q
 make pdf
 \end{verbatim}
