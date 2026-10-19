@@ -31,7 +31,12 @@ def _torch():
     return torch, nn, DataLoader, TensorDataset
 
 
-def build_model(num_classes: int, image_size: int = 32):
+def build_model(num_classes: int, image_size: int = 32, architecture: str = "baseline"):
+    if architecture == "yjn":
+        from CNN.CNN_net import CNN
+        return CNN(num_classes)
+    if architecture != "baseline":
+        raise ValueError("architecture must be baseline or yjn")
     torch, nn, _, _ = _torch()
 
     class CharacterCNN(nn.Module):
@@ -58,14 +63,15 @@ def make_tensor_dataset(images, labels, image_size: int = 32):
     return TensorDataset(tensor, torch.as_tensor(labels, dtype=torch.long))
 
 
-def train(root, output, epochs: int = 20, batch_size: int = 32, learning_rate: float = 1e-3, test_fraction: float = 0.2, seed: int = 42, image_size: int = 32):
+def train(root, output, epochs: int = 20, batch_size: int = 32, learning_rate: float = 1e-3, test_fraction: float = 0.25, seed: int = 42, image_size: int = 32, architecture: str = "baseline", device: str = "auto"):
     torch, _, DataLoader, _ = _torch()
     torch.manual_seed(seed)
     images, labels, class_names = discover_classification_dataset(root)
     train_indices, test_indices = stratified_split(labels, test_fraction, seed)
     train_loader = DataLoader(make_tensor_dataset([images[i] for i in train_indices], labels[train_indices], image_size), batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(make_tensor_dataset([images[i] for i in test_indices], labels[test_indices], image_size), batch_size=batch_size)
-    model = build_model(len(class_names), image_size)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device == "auto" else torch.device(device)
+    model = build_model(len(class_names), image_size, architecture).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = torch.nn.CrossEntropyLoss()
     history = []
@@ -74,6 +80,7 @@ def train(root, output, epochs: int = 20, batch_size: int = 32, learning_rate: f
         model.train()
         running_loss, correct, count = 0.0, 0, 0
         for batch_images, batch_labels in train_loader:
+            batch_images, batch_labels = batch_images.to(device), batch_labels.to(device)
             optimizer.zero_grad()
             logits = model(batch_images)
             loss = criterion(logits, batch_labels)
@@ -87,8 +94,8 @@ def train(root, output, epochs: int = 20, batch_size: int = 32, learning_rate: f
     duration = time.perf_counter() - start
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"state_dict": model.state_dict(), "classes": class_names, "image_size": image_size, "history": history, "seed": seed}, output)
-    return {"classes": class_names, "train_samples": len(train_indices), "test_samples": len(test_indices), "duration_seconds": duration, "history": history}
+    torch.save({"state_dict": model.state_dict(), "classes": class_names, "image_size": image_size, "history": history, "seed": seed, "architecture": architecture, "test_fraction": test_fraction}, output)
+    return {"architecture": architecture, "device": str(device), "parameters": sum(p.numel() for p in model.parameters()), "classes": class_names, "train_samples": len(train_indices), "test_samples": len(test_indices), "duration_seconds": duration, "history": history}
 
 
 def evaluate_model(model, loader):
@@ -97,6 +104,8 @@ def evaluate_model(model, loader):
     correct, total = 0, 0
     with torch.no_grad():
         for images, labels in loader:
+            device = next(model.parameters()).device
+            images, labels = images.to(device), labels.to(device)
             correct += int((model(images).argmax(1) == labels).sum().item())
             total += len(labels)
     return correct / max(1, total)
@@ -109,12 +118,14 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
-    parser.add_argument("--test-fraction", type=float, default=0.2)
+    parser.add_argument("--test-fraction", type=float, default=0.25)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--image-size", type=int, default=32)
+    parser.add_argument("--architecture", choices=("baseline", "yjn"), default="baseline")
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--metrics", help="optional JSON metrics output")
     args = parser.parse_args()
-    metrics = train(args.data, args.model, args.epochs, args.batch_size, args.learning_rate, args.test_fraction, args.seed, args.image_size)
+    metrics = train(args.data, args.model, args.epochs, args.batch_size, args.learning_rate, args.test_fraction, args.seed, args.image_size, args.architecture, args.device)
     if args.metrics:
         Path(args.metrics).parent.mkdir(parents=True, exist_ok=True)
         Path(args.metrics).write_text(json.dumps(metrics, indent=2) + "\n")

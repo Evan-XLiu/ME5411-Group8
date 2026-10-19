@@ -55,3 +55,10 @@ Install the dependencies in \`requirements.txt\`, then run the commands in
 must be arranged as one directory per character label, for example
 \`data/processed/characters/A/*.png\`; raw course data and generated model files
 remain ignored by Git.
+
+## YJN_CODE 集成
+
+已保留 YJN 的 CNN 和原始分割原型，运行方式与比较见 [CNN/README.md](CNN/README.md)。
+统一训练入口支持 `--architecture baseline` 和 `--architecture yjn`，
+CNN 和 HOG/SVM 默认均采用课程要求的 75/25 分层划分。
+Task 7-1 和 7-2 的训练代码已具备；Task 7-3 的实验比较与报告仍待完成。

@@ -35,3 +35,12 @@ The classifier dataset uses one directory per character label, such as
 `characters/0/*.png` and `characters/A/*.png`. Task 4 emits unlabeled crops;
 they must be assigned to class directories using the project ground truth
 before training. All random splits use seed 42 by default.
+
+## Course Task 7 and YJN alternative
+
+The Python module numbers above are implementation names, not course task
+numbers. `task_05.cnn` implements course Task 7-1; `task_06.classical` implements
+Task 7-2. Both default to a stratified 75/25 split with seed 42.
+Use `task_05.cnn --architecture yjn` for the imported YJN CNN, or
+`--architecture baseline` for the original model. See `../CNN/README.md` for
+complete commands and remaining Task 7-3 work.

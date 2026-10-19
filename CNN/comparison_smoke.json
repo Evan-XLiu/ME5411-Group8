@@ -1,0 +1,88 @@
+{
+  "date": "2026-10-19",
+  "purpose": "Three-epoch integration check; not final Task 7-3 evaluation",
+  "python": "3.9.6",
+  "epochs": 3,
+  "batch_size": 32,
+  "seed": 42,
+  "learning_rate": 0.001,
+  "image_size": 32,
+  "test_fraction": 0.25,
+  "threads": 1,
+  "models": [
+    {
+      "architecture": "baseline",
+      "device": "cpu",
+      "parameters": 89447,
+      "classes": [
+        "0",
+        "4",
+        "7",
+        "8",
+        "A",
+        "D",
+        "H"
+      ],
+      "train_samples": 5334,
+      "test_samples": 1778,
+      "duration_seconds": 4.9613612910034135,
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 0.4199940251541978,
+          "train_accuracy": 0.8674540682414699,
+          "test_accuracy": 0.969066366704162
+        },
+        {
+          "epoch": 2,
+          "train_loss": 0.10719624184348586,
+          "train_accuracy": 0.96962879640045,
+          "test_accuracy": 0.9701912260967379
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.06954212721547563,
+          "train_accuracy": 0.9805024371953506,
+          "test_accuracy": 0.9780652418447694
+        }
+      ]
+    },
+    {
+      "architecture": "yjn",
+      "device": "cpu",
+      "parameters": 23975,
+      "classes": [
+        "0",
+        "4",
+        "7",
+        "8",
+        "A",
+        "D",
+        "H"
+      ],
+      "train_samples": 5334,
+      "test_samples": 1778,
+      "duration_seconds": 5.09119141602423,
+      "history": [
+        {
+          "epoch": 1,
+          "train_loss": 1.0752148441174167,
+          "train_accuracy": 0.7024746906636671,
+          "test_accuracy": 0.8194600674915635
+        },
+        {
+          "epoch": 2,
+          "train_loss": 0.43891756052733094,
+          "train_accuracy": 0.8989501312335958,
+          "test_accuracy": 0.8571428571428571
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.3034401198742226,
+          "train_accuracy": 0.9255718035245595,
+          "test_accuracy": 0.9353205849268842
+        }
+      ]
+    }
+  ]
+}

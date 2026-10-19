@@ -27,7 +27,7 @@ def discover_classification_dataset(root: Union[str, Path]):
     return samples, require_numpy().asarray(labels, dtype="int64"), class_names
 
 
-def stratified_split(labels, test_fraction: float = 0.2, seed: int = 42):
+def stratified_split(labels, test_fraction: float = 0.25, seed: int = 42):
     np = require_numpy()
     labels = np.asarray(labels)
     if not 0 < test_fraction < 1:

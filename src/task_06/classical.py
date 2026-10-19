@@ -41,7 +41,7 @@ class NearestCentroid:
         return self.classes_[np.argmin(distances, axis=1)]
 
 
-def train(root, output, test_fraction: float = 0.2, seed: int = 42):
+def train(root, output, test_fraction: float = 0.25, seed: int = 42):
     images, labels, class_names = discover_classification_dataset(root)
     features = extract_features(images)
     train_indices, test_indices = stratified_split(labels, test_fraction, seed)
@@ -74,7 +74,7 @@ def main() -> None:
     train_parser = subparsers.add_parser("train")
     train_parser.add_argument("--data", required=True)
     train_parser.add_argument("--model", required=True)
-    train_parser.add_argument("--test-fraction", type=float, default=0.2)
+    train_parser.add_argument("--test-fraction", type=float, default=0.25)
     train_parser.add_argument("--seed", type=int, default=42)
     train_parser.add_argument("--metrics")
     predict_parser = subparsers.add_parser("predict")
