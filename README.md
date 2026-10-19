@@ -18,6 +18,11 @@ tests/      测试代码
 - 参考文献：`report/references.bib`
 - 图片目录：`report/figures/`
 
+`report/` 是唯一维护的报告主稿，已合入 Wanghongchao 的方法与实验配置扩写。
+原 `report_from_Wanghongchao/` 已合并移除，历史版本可在 Git 记录中查看。
+报告采用课程 Task 1--7 编号，Python 模块仍沿用 `task_01`--`task_06`；映射见报告 Introduction。
+结果、讨论和结论仍需用实际实验补齐。
+
 先安装 MacTeX、TeX Live 或 MiKTeX，然后运行：
 
 ```bash
